@@ -27,12 +27,19 @@ function isValidPrefix(prefix) {
 
 async function getGuildPrefix(guildId) {
 	const now = Date.now();
-	const cached = cache.get(guildId || 'global');
+	const cacheKey = guildId || 'global';
+	const cached = cache.get(cacheKey);
 	if (cached && now - cached.at < CACHE_TTL_MS) return cached.value;
 
 	const map = loadMap();
-	const value = (guildId && map[guildId]) || '.';
-	cache.set(guildId || 'global', { value, at: now });
+	let value = map[guildId];
+
+	// Only use default if no guildId was provided (e.g. DMs or testing)
+	if (!value && !guildId) value = '.';
+
+	if (!value) return null; // Force no match if not set
+
+	cache.set(cacheKey, { value, at: now });
 	return value;
 }
 

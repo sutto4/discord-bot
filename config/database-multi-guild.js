@@ -134,6 +134,61 @@ class GuildDatabase {
             return [];
         }
     }
+
+    // Check if guild has a specific feature enabled
+    static async hasFeature(guildId, featureName) {
+        const query = 'SELECT features FROM guilds WHERE guild_id = ?';
+        
+        try {
+            const [rows] = await pool.execute(query, [guildId]);
+            if (rows.length === 0) return false;
+            
+            const features = rows[0].features ? JSON.parse(rows[0].features) : {};
+            return features[featureName] === true;
+        } catch (error) {
+            console.error('Error checking guild feature:', error);
+            return false;
+        }
+    }
+
+    // Enable/disable a feature for a guild
+    static async setFeature(guildId, featureName, enabled) {
+        const query = 'SELECT features FROM guilds WHERE guild_id = ?';
+        
+        try {
+            const [rows] = await pool.execute(query, [guildId]);
+            const currentFeatures = rows.length > 0 && rows[0].features ? JSON.parse(rows[0].features) : {};
+            
+            currentFeatures[featureName] = enabled;
+            
+            const updateQuery = 'UPDATE guilds SET features = ?, updated_at = CURRENT_TIMESTAMP WHERE guild_id = ?';
+            await pool.execute(updateQuery, [JSON.stringify(currentFeatures), guildId]);
+            
+            console.log(`Guild ${guildId} feature '${featureName}' ${enabled ? 'enabled' : 'disabled'}`);
+        } catch (error) {
+            console.error('Error setting guild feature:', error);
+        }
+    }
+
+    // Get guilds with a specific feature enabled
+    static async getGuildsWithFeature(featureName) {
+        const query = 'SELECT guild_id, guild_name, features FROM guilds WHERE features IS NOT NULL';
+        
+        try {
+            const [rows] = await pool.execute(query);
+            return rows.filter(row => {
+                try {
+                    const features = JSON.parse(row.features);
+                    return features[featureName] === true;
+                } catch {
+                    return false;
+                }
+            });
+        } catch (error) {
+            console.error('Error getting guilds with feature:', error);
+            return [];
+        }
+    }
 }
 
 module.exports = { pool, GuildDatabase };

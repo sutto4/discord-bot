@@ -1,43 +1,42 @@
 const { SlashCommandBuilder } = require('discord.js');
-const db = require('../config/database-multi-guild');
-const hasFeature = require('../utils/premium');
+const { GuildDatabase } = require('../config/database-multi-guild');
 
 module.exports = {
 	data: new SlashCommandBuilder()
 		.setName('setprefix')
-		.setDescription('Set a custom dot command prefix for this server')
+		.setDescription('Set a custom prefix for this server (dot commands)')
 		.addStringOption(option =>
-			option.setName('prefix')
-				.setDescription('The new prefix (e.g. . ! ?)')
+			option
+				.setName('prefix')
+				.setDescription('The new custom prefix to use (e.g. ! or ?)')
 				.setRequired(true)
 		),
+
 	async execute(interaction) {
-		const guildId = interaction.guild.id;
-		const newPrefix = interaction.options.getString('prefix');
+		const guildId = interaction.guildId;
+		const guildName = interaction.guild.name;
+		const prefix = interaction.options.getString('prefix');
 
-		// Check premium feature access
-		const isPremium = await hasFeature(guildId, 'custom_prefix');
-		if (!isPremium) {
+		// Ensure this guild exists in DB
+		await GuildDatabase.initializeGuild(guildId, guildName);
+
+		// Check feature flag
+		const hasFeature = await GuildDatabase.hasFeature(guildId, 'custom_prefix');
+		if (!hasFeature) {
 			return await interaction.reply({
-				content: '❌ This is a premium feature. Upgrade to unlock it.',
+				content: '❌ This server does not have the `custom_prefix` feature enabled.',
 				ephemeral: true
 			});
 		}
 
-		try {
-			await db.query(`
-				UPDATE guilds
-				SET custom_prefix = ?
-				WHERE guild_id = ?
-			`, [newPrefix, guildId]);
+		// Update DB
+		await GuildDatabase.updateGuildConfig(guildId, {
+			custom_prefix: prefix
+		});
 
-			await interaction.reply(`✅ Custom prefix updated to \`${newPrefix}\``);
-		} catch (err) {
-			console.error('[PREFIX UPDATE ERROR]', err);
-			await interaction.reply({
-				content: '❌ Failed to update prefix.',
-				ephemeral: true
-			});
-		}
+		await interaction.reply({
+			content: `✅ Custom prefix updated to: \`${prefix}\``,
+			ephemeral: true
+		});
 	}
 };

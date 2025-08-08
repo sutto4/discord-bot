@@ -17,7 +17,7 @@ module.exports = {
 		if (!interaction.member.permissions.has('ManageChannels')) {
 			return await interaction.reply({
 				content: '❌ You need the "Manage Channels" permission to use this command.',
-				ephemeral: true
+				flags: 64
 			});
 		}
 
@@ -27,7 +27,7 @@ module.exports = {
 		if (channel.type !== 0) { // 0 = GUILD_TEXT
 			return await interaction.reply({
 				content: '❌ Please select a text channel.',
-				ephemeral: true
+				flags: 64
 			});
 		}
 
@@ -53,14 +53,14 @@ module.exports = {
 
 			await interaction.reply({
 				content: `✅ Feedback channel set to ${channel}. All feedback submissions will now be sent there.`,
-				ephemeral: true
+				flags: 64
 			});
 
 		} catch (error) {
 			console.error('Error setting feedback channel:', error);
 			await interaction.reply({
 				content: '❌ An error occurred while setting the feedback channel.',
-				ephemeral: true
+				flags: 64
 			});
 		}
 	},

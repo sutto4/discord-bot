@@ -5,6 +5,8 @@ const { GuildDatabase } = require('../config/database-multi-guild');
 
 async function syncDonators(client) {
 	console.log('[SYNC] Starting donator sync process');
+	const syncStartTime = Date.now();
+	
 	try {
 		// Get guilds with FDG donator sync enabled
 		const enabledGuilds = await GuildDatabase.getGuildsWithFeature('fdg_donator_sync');
@@ -70,11 +72,39 @@ async function syncDonators(client) {
 			}
 			
 			console.log(`[SYNC] ${guild.name}: Sync completed - Processed: ${processed}, Found in server: ${found}`);
+			
+			// Log this guild's sync to database
+			await GuildDatabase.logDonatorSync(
+				guild.id, 
+				processed, 
+				found, 
+				Date.now() - syncStartTime, 
+				true, 
+				null
+			);
 		}
 		
 		console.log('[SYNC] Overall sync process completed');
+		
+		// Log overall sync completion
+		const totalSyncTime = Date.now() - syncStartTime;
+		console.log(`[SYNC] Total sync time: ${totalSyncTime}ms`);
+		
 	} catch (err) {
 		console.error('[SYNC] Error during donator sync:', err);
+		
+		// Log sync failure to database if we can identify which guild
+		try {
+			await GuildDatabase.logSyncAttempt(
+				'global', 
+				0, 
+				false, 
+				err.message
+			);
+		} catch (logError) {
+			console.error('[SYNC] Failed to log sync error:', logError);
+		}
+		
 		throw err; // Re-throw to allow command to handle the error
 	}
 }

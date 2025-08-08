@@ -24,14 +24,14 @@ module.exports = {
 				await interaction.member.roles.add(verifyRole);
 				await interaction.reply({
 					content: '✅ You have been verified!',
-					ephemeral: true
+					flags: 64
 				});
 				success = true;
 			} catch (err) {
 				console.error('Failed to assign verify role:', err);
 				await interaction.reply({
 					content: '❌ Could not verify you.',
-					ephemeral: true
+					flags: 64
 				});
 			}
 
@@ -140,7 +140,7 @@ module.exports = {
 					// Acknowledge the user
 					await interaction.reply({
 						content: '✅ Thank you for your feedback! Your submission has been sent to our staff team.',
-						ephemeral: true
+						flags: 64
 					});
 				} else {
 					// Fallback to verification channel if no feedback channel is configured
@@ -152,7 +152,7 @@ module.exports = {
 					
 					await interaction.reply({
 						content: '✅ Thank you for your feedback! Your submission has been sent to our staff team.\n⚠️ *Note: Feedback channel not configured - sent to verification log.*',
-						ephemeral: true
+						flags: 64
 					});
 				}
 
@@ -170,7 +170,7 @@ module.exports = {
 				console.error('Error processing feedback:', error);
 				await interaction.reply({
 					content: '❌ There was an error submitting your feedback. Please try again later.',
-					ephemeral: true
+					flags: 64
 				});
 			}
 		}
@@ -212,7 +212,7 @@ module.exports = {
 				await interaction.reply({
 					embeds: [embed],
 					components: [channelTypeButtons],
-					ephemeral: true
+					flags: 64
 				});
 			}
 
@@ -444,7 +444,7 @@ module.exports = {
 				await interaction.reply({
 					content: '⚠️ Role configuration requires server restart to take effect. Please update your `.env` file manually for now.\n\n' +
 							 'This feature will be enhanced in a future update.',
-					ephemeral: true
+					flags: 64
 				});
 			}
 
@@ -452,7 +452,7 @@ module.exports = {
 				await interaction.reply({
 					content: '⚠️ Sync interval configuration requires server restart to take effect. Please update your `config/bot.js` file manually for now.\n\n' +
 							 'This feature will be enhanced in a future update.',
-					ephemeral: true
+					flags: 64
 				});
 			}
 		}
@@ -466,7 +466,7 @@ module.exports = {
 				await command.execute(interaction);
 			} catch (error) {
 				console.error(error);
-				await interaction.reply({ content: '❌ Command failed.', ephemeral: true });
+				await interaction.reply({ content: '❌ Command failed.', flags: 64 });
 			}
 		}
 	}

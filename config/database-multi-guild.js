@@ -346,6 +346,36 @@ class GuildDatabase {
             return false;
         }
     }
+
+    // Log donator sync for a specific guild
+    static async logDonatorSync(guildId, accountsProcessed, accountsFound, duration, success, errorMessage) {
+        const query = `
+            INSERT INTO donator_syncs 
+            (guild_id, accounts_processed, accounts_found, duration_ms, success, error_message) 
+            VALUES (?, ?, ?, ?, ?, ?)
+        `;
+        
+        try {
+            await pool.execute(query, [guildId, accountsProcessed, accountsFound, duration, success, errorMessage]);
+        } catch (error) {
+            console.error('Error logging donator sync:', error);
+        }
+    }
+
+    // Log general sync attempt
+    static async logSyncAttempt(source, guildsProcessed, success, errorMessage) {
+        const query = `
+            INSERT INTO sync_logs 
+            (source, guilds_processed, success, error_message) 
+            VALUES (?, ?, ?, ?)
+        `;
+        
+        try {
+            await pool.execute(query, [source, guildsProcessed, success, errorMessage]);
+        } catch (error) {
+            console.error('Error logging sync attempt:', error);
+        }
+    }
 }
 
 module.exports = { pool, GuildDatabase };

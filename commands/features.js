@@ -58,7 +58,7 @@ module.exports = {
 
 		await interaction.reply({
 			content: statusText,
-			ephemeral: true
+			flags: 64
 		});
 	},
 };

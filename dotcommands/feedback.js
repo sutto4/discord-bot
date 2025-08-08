@@ -59,7 +59,7 @@ module.exports = {
 			// Show modal to user
 			await message.reply({ 
 				content: '📝 Opening feedback form...', 
-				ephemeral: true 
+				flags: 64 
 			});
 
 			// We need to create an interaction to show the modal

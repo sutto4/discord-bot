@@ -47,7 +47,7 @@ module.exports = {
 		if (!interaction.member.permissions.has('ManageGuild')) {
 			return await interaction.reply({
 				content: '❌ You need the "Manage Server" permission to use this command.',
-				ephemeral: true
+				flags: 64
 			});
 		}
 
@@ -108,7 +108,7 @@ module.exports = {
 		await interaction.reply({
 			embeds: [configEmbed],
 			components: [configButtons],
-			ephemeral: true
+			flags: 64
 		});
 	},
 };

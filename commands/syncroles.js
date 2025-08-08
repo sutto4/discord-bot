@@ -19,11 +19,11 @@ module.exports = {
 		if (!hasFeature) {
 			return await interaction.reply({
 				content: '❌ **FDG Donator Sync is not enabled for this server.**\n\nThis is a premium feature. Contact support to upgrade your package.',
-				ephemeral: true
+				flags: 64
 			});
 		}
 		
-		await interaction.deferReply({ ephemeral: true });
+		await interaction.deferReply({ flags: 64 });
 		console.log('[SYNC CMD] Deferred reply sent');
 
 		try {

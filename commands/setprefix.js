@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
-const db = require('../utils/database-multi-guild');
+const db = require('../config/database-multi-guild');
 const hasFeature = require('../utils/premium');
 
 module.exports = {

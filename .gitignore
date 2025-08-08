@@ -1,5 +1,24 @@
 # Environment variables
 .env
+.env.test
+.env.local
+.env.production
+
+# Database setup files with credentials
+create-bot-user.sql
+setup-bot-user.sh
+mysql-setup.sh
+
+# Database backups (may contain sensitive data)
+backup_*.sql
+db_backup_*.sql
+*_backup.sql
+
+# Additional security files
+**/credentials.*
+**/secrets.*
+**/*password*
+**/*secret*
 
 # Dependencies
 node_modules/
@@ -38,6 +57,7 @@ jspm_packages/
 .env.test
 .env.local
 .env.production
+
 
 # IDE files
 .vscode/

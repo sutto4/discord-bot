@@ -1,6 +1,7 @@
 const { Events } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const { getGuildPrefix } = require('../utils/prefix');
 
 module.exports = {
 	name: Events.MessageCreate,
@@ -8,12 +9,12 @@ module.exports = {
 		// Ignore messages from bots
 		if (message.author.bot) return;
 
-		// Check if message starts with a dot
-		if (!message.content.startsWith('.')) return;
+		const prefix = await getGuildPrefix(message.guild?.id);
+		if (!prefix || !message.content.startsWith(prefix)) return;
 
 		// Parse command and arguments
-		const args = message.content.slice(1).trim().split(/ +/);
-		const commandName = args.shift().toLowerCase();
+		const args = message.content.slice(prefix.length).trim().split(/\s+/);
+		const commandName = args.shift()?.toLowerCase();
 
 		// Load dot commands dynamically
 		const dotCommandsPath = path.join(__dirname, '../dotcommands');

@@ -69,7 +69,41 @@ function getActionColor(action) {
 	}
 }
 
+function buildUserDmEmbed(action, guildName, moderatorTag, reason, targetUser, extraFields = []) {
+	const actionTitle = {
+		warn: 'Warning Issued',
+		kick: 'You Were Kicked',
+		mute: 'You Were Muted',
+		ban: 'You Were Banned'
+	}[action] || 'Moderation Notice';
+
+	const color = {
+		warn: 0xFFFF00,
+		kick: 0xFFA500,
+		mute: 0x808080,
+		ban: 0xFF0000
+	}[action] || 0x2F3136;
+
+	const embed = new EmbedBuilder()
+		.setTitle(actionTitle)
+		.setColor(color)
+		.setDescription(`An action was taken against your account in ${guildName}.`)
+		.addFields(
+			{ name: 'Moderator', value: `${moderatorTag}`, inline: true },
+			{ name: 'Reason', value: reason || 'No reason provided', inline: false }
+		)
+		.setThumbnail(targetUser?.displayAvatarURL?.({ size: 128 }) || null)
+		.setTimestamp();
+
+	if (Array.isArray(extraFields) && extraFields.length) {
+		embed.addFields(...extraFields);
+	}
+
+	return embed;
+}
+
 module.exports = {
 	parseDuration,
-	logModerationAction
+	logModerationAction,
+	buildUserDmEmbed
 };

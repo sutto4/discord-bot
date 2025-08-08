@@ -1,4 +1,4 @@
-const { PermissionFlagsBits } = require('discord.js');
+const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { logModerationAction } = require('../utils/moderation');
 
 module.exports = {
@@ -20,8 +20,24 @@ module.exports = {
 		const member = await message.guild.members.fetch(targetUser.id).catch(() => null);
 		if (!member) return message.reply('Member not found.');
 
-		await targetUser.send(`⚠️ Warning in ${message.guild.name}: ${reason}`).catch(() => null);
+		// Try to DM the user with an embed
+		const embed = new EmbedBuilder()
+			.setTitle('Warning Issued')
+			.setColor(0xFFFF00)
+			.setDescription(`You have been warned in ${message.guild.name}.`)
+			.addFields(
+				{ name: 'Moderator', value: `${message.author.tag}`, inline: true },
+				{ name: 'Reason', value: reason, inline: false }
+			)
+			.setThumbnail(targetUser.displayAvatarURL({ size: 128 }))
+			.setTimestamp();
+		try {
+			await targetUser.send({ embeds: [embed] });
+		} catch (error) {
+			return message.reply('Unable to send DM to the user.');
+		}
+
 		await logModerationAction(message.guild, 'warn', message.author, member, reason);
-		return message.reply(`Warned ${targetUser.tag}.`);
+		return message.reply(`${targetUser.tag} has been warned by ${message.author.tag} for ${reason}.`);
 	}
 };

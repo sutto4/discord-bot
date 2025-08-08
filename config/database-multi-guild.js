@@ -104,7 +104,8 @@ class GuildDatabase {
         const queries = {
             verifications: 'SELECT COUNT(*) as count FROM user_verifications WHERE guild_id = ? AND success = TRUE',
             feedback: 'SELECT COUNT(*) as count FROM feedback_submissions WHERE guild_id = ?',
-            donators: 'SELECT COUNT(*) as count FROM donator_syncs WHERE guild_id = ?'
+            donators: 'SELECT COUNT(*) as count FROM donator_syncs WHERE guild_id = ?',
+            sync_operations: 'SELECT COUNT(*) as count FROM sync_operations WHERE guild_id = ? AND operation_type = "donator_sync"'
         };
 
         try {
@@ -118,7 +119,7 @@ class GuildDatabase {
             return results;
         } catch (error) {
             console.error('Error getting guild stats:', error);
-            return { verifications: 0, feedback: 0, donators: 0 };
+            return { verifications: 0, feedback: 0, donators: 0, sync_operations: 0 };
         }
     }
 

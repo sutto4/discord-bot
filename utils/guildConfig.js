@@ -1,27 +1,37 @@
-const mysql = require('mysql2/promise');
+const fs = require('fs');
+const path = require('path');
 
 let pool;
-async function getDb() {
-	if (!pool) {
-		pool = await mysql.createPool({
-			host: process.env.DB_HOST,
-			user: process.env.DB_USER,
-			password: process.env.DB_PASS,
-			database: process.env.DB_NAME,
-			waitForConnections: true,
-			connectionLimit: 5
-		});
+let warnedNoDb = false;
+const configPath = path.join(__dirname, '../data/verify_log_channels.json');
+const logChannelCache = new Map();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+
+function loadVerifyLogMap() {
+	// Safely read the JSON file; return {} if missing/invalid
+	try {
+		if (!fs.existsSync(configPath)) return {};
+		const raw = fs.readFileSync(configPath, 'utf8');
+		return JSON.parse(raw || '{}') || {};
+	} catch {
+		return {};
 	}
-	return pool;
 }
 
 async function getLogChannelId(guildId) {
-	const db = await getDb();
-	const [rows] = await db.execute(
-		'SELECT log_channel_id FROM guilds WHERE guild_id = ? LIMIT 1',
-		[guildId]
-	);
-	return rows?.[0]?.log_channel_id || null;
+	// cache check
+	const now = Date.now();
+	const cached = logChannelCache.get(guildId);
+	if (cached && (now - cached.fetchedAt) < CACHE_TTL_MS) {
+		return cached.value;
+	}
+
+	// Read from the same file set by /setverifylog
+	const map = loadVerifyLogMap();
+	const value = map[guildId] || null;
+
+	logChannelCache.set(guildId, { value, fetchedAt: now });
+	return value;
 }
 
 module.exports = {

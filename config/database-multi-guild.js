@@ -350,13 +350,13 @@ class GuildDatabase {
     // Log donator sync for a specific guild
     static async logDonatorSync(guildId, accountsProcessed, accountsFound, duration, success, errorMessage) {
         const query = `
-            INSERT INTO donator_syncs 
-            (guild_id, accounts_processed, accounts_found, duration_ms, success, error_message) 
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO sync_operations 
+            (guild_id, operation_type, accounts_processed, accounts_found, duration_ms, success, error_message) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         `;
         
         try {
-            await pool.execute(query, [guildId, accountsProcessed, accountsFound, duration, success, errorMessage]);
+            await pool.execute(query, [guildId, 'donator_sync', accountsProcessed, accountsFound, duration, success, errorMessage]);
         } catch (error) {
             console.error('Error logging donator sync:', error);
         }
@@ -365,8 +365,8 @@ class GuildDatabase {
     // Log general sync attempt
     static async logSyncAttempt(source, guildsProcessed, success, errorMessage) {
         const query = `
-            INSERT INTO sync_logs 
-            (source, guilds_processed, success, error_message) 
+            INSERT INTO sync_operations 
+            (operation_type, accounts_processed, success, error_message) 
             VALUES (?, ?, ?, ?)
         `;
         

@@ -8,6 +8,7 @@
 create-bot-user.sql
 setup-bot-user.sh
 mysql-setup.sh
+MANAGEMENT_GUIDE.md
 
 # Database backups (may contain sensitive data)
 backup_*.sql

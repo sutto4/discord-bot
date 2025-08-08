@@ -1,6 +1,6 @@
 const { logToChannel } = require('./logger');
 
-module.exports = async function applyDonatorRole(member, db, donatorRoleMapping) {
+async function applyDonatorRole(member, db, donatorRoleMapping) {
 	try {
 		const [rows] = await db.query(
 			`SELECT ta.t1_expiry, ta.t2_expiry, ta.t3_expiry
@@ -63,4 +63,6 @@ module.exports = async function applyDonatorRole(member, db, donatorRoleMapping)
 	} catch (err) {
 		console.error(`Error applying donator role to ${member.user?.tag || member.id}:`, err);
 	}
-};
+}
+
+module.exports = { applyDonatorRole };

@@ -34,10 +34,14 @@ async function getGuildPrefix(guildId) {
 	const map = loadMap();
 	let value = map[guildId];
 
-	// Only use default if no guildId was provided (e.g. DMs or testing)
-	if (!value && !guildId) value = '.';
+	if (!value && guildId) {
+		// First time seeing this guild, set default prefix
+		value = '.';
+		map[guildId] = value;
+		saveMap(map);
+	}
 
-	if (!value) return null; // Force no match if not set
+	if (!value) return null;
 
 	cache.set(cacheKey, { value, at: now });
 	return value;

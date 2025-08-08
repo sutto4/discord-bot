@@ -1,7 +1,8 @@
 const {
-	SlashCommandBuilder,
-	PermissionFlagsBits,
-	ChannelType
+        SlashCommandBuilder,
+        PermissionFlagsBits,
+        ChannelType,
+        MessageFlags
 } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -37,9 +38,9 @@ module.exports = {
 	async execute(interaction) {
 		const channel = interaction.options.getChannel('channel');
 		saveChannel(interaction.guild.id, channel.id);
-		await interaction.reply({
-			content: `✅ Logs for verification and moderation will go to <#${channel.id}>.`,
-			ephemeral: true
-		});
-	}
+                await interaction.reply({
+                        content: `✅ Logs for verification and moderation will go to <#${channel.id}>.`,
+                        flags: MessageFlags.Ephemeral
+                });
+        }
 };

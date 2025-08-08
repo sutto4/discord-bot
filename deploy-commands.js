@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const clientId = process.env.CLIENT_ID;
-const guildId = process.env.GUILD_ID; 
+const guildIds = process.env.GUILD_IDS ? process.env.GUILD_IDS.split(',').map(id => id.trim()) : [process.env.GUILD_ID];
 const token = process.env.TOKEN;
 
 const commands = [];
@@ -29,12 +29,22 @@ const rest = new REST({ version: '10' }).setToken(token);
 
 (async () => {
 	try {
-		console.log(`Registering slash commands for guild ${guildId}...`);
-		await rest.put(
-			Routes.applicationGuildCommands(clientId, guildId),
-			{ body: commands }
-		);
-		console.log('✅ Slash commands registered (guild-specific).');
+		console.log(`Registering slash commands for ${guildIds.length} guild(s)...`);
+		
+		for (const guildId of guildIds) {
+			if (!guildId) {
+				console.warn('⚠️ Skipping empty guild ID');
+				continue;
+			}
+			
+			console.log(`Deploying to guild: ${guildId}`);
+			await rest.put(
+				Routes.applicationGuildCommands(clientId, guildId),
+				{ body: commands }
+			);
+		}
+		
+		console.log('✅ Slash commands registered for all guilds.');
 	} catch (error) {
 		console.error(error);
 	}

@@ -14,14 +14,18 @@ function getLogChannelId(guildId) {
 	}
 }
 
-async function logToChannel(guild, message) {
+async function logToChannel(guild, message, embed = null) {
 	const logChannelId = getLogChannelId(guild.id);
 	if (!logChannelId) return;
 
 	try {
 		const logChannel = guild.channels.cache.get(logChannelId);
 		if (logChannel) {
-			await logChannel.send(message);
+			const messageOptions = { content: message };
+			if (embed) {
+				messageOptions.embeds = [embed];
+			}
+			await logChannel.send(messageOptions);
 		}
 	} catch (err) {
 		console.error('Error logging to channel:', err);

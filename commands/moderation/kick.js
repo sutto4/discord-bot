@@ -1,32 +1,35 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { PermissionFlagsBits } = require('discord.js');
 const { logModerationAction } = require('../../utils/moderation');
 
 module.exports = {
-	data: new SlashCommandBuilder()
-		.setName('kick')
-		.setDescription('Kick a member from the server')
-		.setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
-		.addUserOption(o => o.setName('target').setDescription('Member to kick').setRequired(true))
-		.addStringOption(o => o.setName('reason').setDescription('Reason for kick').setRequired(false)),
-	
-	async execute(interaction) {
-		if (!interaction.memberPermissions?.has(PermissionFlagsBits.ModerateMembers)) {
-			return interaction.reply({ content: 'You do not have permission for this command.', ephemeral: true });
+	name: 'kick',
+	description: 'Kick a member from the server',
+	usage: '.kick @user [reason]',
+	async execute(message, args) {
+		if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+			return message.reply('You do not have permission for this command.');
 		}
 
-		const targetUser = interaction.options.getUser('target', true);
-		const reason = interaction.options.getString('reason') || 'No reason provided';
+		if (args.length < 1) {
+			return message.reply('Usage: `.kick @user [reason]`');
+		}
 
-		const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
-		if (!member) return interaction.reply({ content: 'Member not found.', ephemeral: true });
-		if (!member.kickable) return interaction.reply({ content: 'I cannot kick this member.', ephemeral: true });
+		const targetUser = message.mentions.users.first();
+		if (!targetUser) {
+			return message.reply('Please mention a user to kick.');
+		}
+
+		const reason = args.slice(1).join(' ') || 'No reason provided';
+		const member = await message.guild.members.fetch(targetUser.id).catch(() => null);
+		if (!member) return message.reply('Member not found.');
+		if (!member.kickable) return message.reply('I cannot kick this member.');
 
 		try {
 			await member.kick(reason);
-			await logModerationAction(interaction.guild, 'kick', interaction.user, member, reason);
-			return interaction.reply({ content: `✅ Kicked ${targetUser.tag}.`, ephemeral: true });
+			await logModerationAction(message.guild, 'kick', message.author, member, reason);
+			return message.reply(`✅ Kicked ${targetUser.tag}.`);
 		} catch (error) {
-			return interaction.reply({ content: 'Failed to kick member.', ephemeral: true });
+			return message.reply('Failed to kick member.');
 		}
 	}
 };

@@ -1,34 +1,45 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { PermissionFlagsBits } = require('discord.js');
 const { logModerationAction } = require('../../utils/moderation');
 
 module.exports = {
-	data: new SlashCommandBuilder()
-		.setName('ban')
-		.setDescription('Ban a member from the server')
-		.setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
-		.addUserOption(o => o.setName('target').setDescription('Member to ban').setRequired(true))
-		.addIntegerOption(o => o.setName('delete_days').setDescription('Delete message history (0-7 days)').setMinValue(0).setMaxValue(7))
-		.addStringOption(o => o.setName('reason').setDescription('Reason for ban').setRequired(false)),
+	name: 'ban',
+	description: 'Ban a member from the server',
+	usage: '.ban @user [delete_days] [reason]',
 	
-	async execute(interaction) {
-		if (!interaction.memberPermissions?.has(PermissionFlagsBits.ModerateMembers)) {
-			return interaction.reply({ content: 'You do not have permission for this command.', ephemeral: true });
+	async execute(message, args) {
+		if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+			return message.reply('You do not have permission for this command.');
 		}
 
-		const targetUser = interaction.options.getUser('target', true);
-		const reason = interaction.options.getString('reason') || 'No reason provided';
-		const deleteDays = interaction.options.getInteger('delete_days') ?? 0;
+		if (args.length < 1) {
+			return message.reply('Usage: `.ban @user [delete_days] [reason]`');
+		}
 
-		const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
-		if (!member) return interaction.reply({ content: 'Member not found.', ephemeral: true });
-		if (!member.bannable) return interaction.reply({ content: 'I cannot ban this member.', ephemeral: true });
+		const targetUser = message.mentions.users.first();
+		if (!targetUser) {
+			return message.reply('Please mention a user to ban.');
+		}
+
+		// Check if second arg is a number (delete days)
+		let deleteDays = 0;
+		let reasonStart = 1;
+		
+		if (args[1] && !isNaN(args[1]) && parseInt(args[1]) >= 0 && parseInt(args[1]) <= 7) {
+			deleteDays = parseInt(args[1]);
+			reasonStart = 2;
+		}
+
+		const reason = args.slice(reasonStart).join(' ') || 'No reason provided';
+		const member = await message.guild.members.fetch(targetUser.id).catch(() => null);
+		if (!member) return message.reply('Member not found.');
+		if (!member.bannable) return message.reply('I cannot ban this member.');
 
 		try {
 			await member.ban({ reason, deleteMessageDays: deleteDays });
-			await logModerationAction(interaction.guild, 'ban', interaction.user, member, reason);
-			return interaction.reply({ content: `✅ Banned ${targetUser.tag}.`, ephemeral: true });
+			await logModerationAction(message.guild, 'ban', message.author, member, reason);
+			return message.reply(`✅ Banned ${targetUser.tag}.`);
 		} catch (error) {
-			return interaction.reply({ content: 'Failed to ban member.', ephemeral: true });
+			return message.reply('Failed to ban member.');
 		}
 	}
 };

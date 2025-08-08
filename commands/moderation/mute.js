@@ -1,32 +1,36 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { PermissionFlagsBits } = require('discord.js');
 const { parseDuration, logModerationAction } = require('../../utils/moderation');
 
 module.exports = {
-	data: new SlashCommandBuilder()
-		.setName('mute')
-		.setDescription('Timeout a member')
-		.setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
-		.addUserOption(o => o.setName('target').setDescription('Member to mute').setRequired(true))
-		.addStringOption(o => o.setName('duration').setDescription('Duration (e.g., 10m, 2h, 1d)').setRequired(true))
-		.addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(false)),
-	async execute(interaction) {
-		if (!interaction.memberPermissions?.has(PermissionFlagsBits.ModerateMembers)) {
-			return interaction.reply({ content: 'You do not have permission for this command.', ephemeral: true });
+	name: 'mute',
+	description: 'Timeout a member',
+	usage: '.mute @user <duration> [reason]',
+	async execute(message, args) {
+		if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+			return message.reply('You do not have permission for this command.');
 		}
 
-		const targetUser = interaction.options.getUser('target', true);
-		const durationStr = interaction.options.getString('duration', true);
-		const reason = interaction.options.getString('reason') || 'No reason provided';
+		if (args.length < 2) {
+			return message.reply('Usage: `.mute @user <duration> [reason]`');
+		}
+
+		const targetUser = message.mentions.users.first();
+		if (!targetUser) {
+			return message.reply('Please mention a user to mute.');
+		}
+
+		const durationStr = args[1];
+		const reason = args.slice(2).join(' ') || 'No reason provided';
 
 		const ms = parseDuration(durationStr);
-		if (!ms) return interaction.reply({ content: 'Invalid duration. Use formats like 10m, 2h, 1d.', ephemeral: true });
+		if (!ms) return message.reply('Invalid duration. Use formats like 10m, 2h, 1d.');
 
-		const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
-		if (!member) return interaction.reply({ content: 'Member not found.', ephemeral: true });
-		if (!member.moderatable) return interaction.reply({ content: 'I cannot mute this member.', ephemeral: true });
+		const member = await message.guild.members.fetch(targetUser.id).catch(() => null);
+		if (!member) return message.reply('Member not found.');
+		if (!member.moderatable) return message.reply('I cannot mute this member.');
 
 		await member.timeout(ms, reason).catch(() => null);
-		await logModerationAction(interaction.guild, 'mute', interaction.user, member, reason, durationStr);
-		return interaction.reply({ content: `Muted ${targetUser.tag} for ${durationStr}.`, ephemeral: true });
+		await logModerationAction(message.guild, 'mute', message.author, member, reason, durationStr);
+		return message.reply(`✅ Muted ${targetUser.tag} for ${durationStr}.`);
 	}
 };

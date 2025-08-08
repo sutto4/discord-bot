@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const db = require('../utils/database');
+const db = require('../utils/database-multi-guild');
 const { Collection } = require('discord.js');
 
 // Load all dotcommands into a collection

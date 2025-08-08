@@ -5,7 +5,7 @@ module.exports = {
 	name: 'warn',
 	description: 'Warn a user in the server.',
 	args: true,
-	usage: '<@user> <reason>',
+	usage: '.warn @user <reason>',
 	permissions: PermissionFlagsBits.ModerateMembers,
 
 	async execute(message, args) {

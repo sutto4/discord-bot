@@ -1,8 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 
-let pool;
-let warnedNoDb = false;
 const configPath = path.join(__dirname, '../data/verify_log_channels.json');
 const logChannelCache = new Map();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 min

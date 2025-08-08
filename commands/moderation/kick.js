@@ -3,7 +3,7 @@ const { logModerationAction, buildUserDmEmbed } = require('../../utils/moderatio
 
 module.exports = {
 	name: 'kick',
-	description: 'Kick a member from the server',
+	description: 'Kick a member from the server.',
 	usage: '.kick @user [reason]',
 	permissions: PermissionFlagsBits.ModerateMembers,
 

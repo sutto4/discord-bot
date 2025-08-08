@@ -11,13 +11,14 @@ A comprehensive Discord bot for managing donator roles, verification, server inf
 - **📊 Logging**: Verification, role assignment, and feedback logging
 - **⚡ Slash Commands**: Modern Discord slash command support
 - **💬 Dot Commands**: Message-based commands for quick access
+- **🛡️ Moderation Suite**: Dot commands for .warn, .kick, .mute, .ban with logging to the configured channel
 
 ## Commands
 
 ### Slash Commands
 - `/config` - Configure all bot settings via modal UI
 - `/sendverify` - Send verification embed with button
-- `/setverifylog <channel>` - Set verification logging channel
+- `/setverifylog <channel>` - Set the shared log channel for verification and moderation
 - `/setfeedbackchannel <channel>` - Set feedback submissions channel
 - `/syncroles` - Manually sync donator roles
 
@@ -26,6 +27,10 @@ A comprehensive Discord bot for managing donator roles, verification, server inf
 - `.connect` - Show server connection information with one-click connect
 - `.feedback` - Submit feedback via modal form
 - `.help` - Show all available dot commands
+- `.warn @user <reason>` - Warn a user (requires Moderate Members)
+- `.kick @user [reason]` - Kick a user (requires Moderate Members)
+- `.mute @user <duration> [reason]` - Timeout a user (10m, 2h, 1d, 30s) (requires Moderate Members)
+- `.ban @user [delete_days] [reason]` - Ban a user (optional delete 0-7 days) (requires Moderate Members)
 
 ## Setup Instructions
 
@@ -115,6 +120,10 @@ A comprehensive Discord bot for managing donator roles, verification, server inf
 - **Automatic**: Every 12 hours (configurable in `config/bot.js`)
 - **Manual**: Use `/syncroles` command
 
+### Moderation Commands
+- **Logging Channel**: Use `/setverifylog` to set the channel used for both verification and moderation logs.
+  - Stored in `data/verify_log_channels.json` per guild.
+
 ## File Structure
 
 ```
@@ -135,7 +144,11 @@ discord-bot/
 │   ├── connect.js
 │   ├── feedback.js
 │   ├── help.js
-│   └── tebex.js
+│   ├── tebex.js
+│   ├── warn.js        # Moderation: warn user
+│   ├── kick.js        # Moderation: kick user
+│   ├── mute.js        # Moderation: timeout user
+│   └── ban.js         # Moderation: ban user
 ├── events/            # Discord event handlers
 │   ├── guildMemberAdd.js
 │   ├── interactionCreate.js
@@ -158,7 +171,7 @@ discord-bot/
 2. **Configure**: Create `.env` file with required credentials
 3. **Deploy**: `node deploy-commands.js`
 4. **Run**: `node config/bot.js`
-5. **Setup Channels**: Use `/setverifylog` and `/setfeedbackchannel`
+5. **Setup Channels**: Use `/setverifylog` (shared verification/moderation log channel)
 2. Use `/sendverify` to create verification embed
 3. Users click "Verify" button to get roles
 
@@ -173,12 +186,21 @@ discord-bot/
 - **Manual sync** with `/syncroles` command
 - **Logging** for all verification and role changes
 - **Feedback management** in dedicated channel
+- **Moderation commands**: warn, kick, mute, ban with logging
 
 ## Troubleshooting
 
-**Bot not responding:** Check permissions, token, and deployed commands  
-**Database errors:** Verify `.env` credentials and database tables  
-**Role sync issues:** Check role IDs and bot permissions
+- **Bot not responding:** Check permissions, token, and deployed commands  
+- **Database errors:** Verify `.env` credentials and database tables  
+- **Role sync issues:** Check role IDs and bot permissions
+- **Moderation logs not appearing**
+  - Ensure `/setverifylog` is set in the guild
+  - Check the bot can send messages in that channel
+  - Verify `data/verify_log_channels.json` contains your guild ID
+- **“.mute invalid duration”**
+  - Use formats like `10m`, `2h`, `1d`, `30s`
+- **Permission denied when using moderation commands**
+  - The role must have the “Moderate Members” permission
 
 ## Support
 

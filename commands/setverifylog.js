@@ -25,7 +25,7 @@ function saveChannel(guildId, channelId) {
 module.exports = {
 	data: new SlashCommandBuilder()
 		.setName('setverifylog')
-		.setDescription('Set the channel where verification attempts will be logged.')
+		.setDescription('Set the channel used for verification and moderation logs.')
 		.addChannelOption(option =>
 			option.setName('channel')
 				.setDescription('The log channel')
@@ -38,8 +38,8 @@ module.exports = {
 		const channel = interaction.options.getChannel('channel');
 		saveChannel(interaction.guild.id, channel.id);
 		await interaction.reply({
-            content: `✅ Verification logs will now go to <#${channel.id}>`,
-            flags: 64 // ✅ Ephemeral
-        });
+			content: `✅ Logs for verification and moderation will go to <#${channel.id}>.`,
+			ephemeral: true
+		});
 	}
 };

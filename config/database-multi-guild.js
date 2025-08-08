@@ -1,11 +1,12 @@
 const mysql = require('mysql2/promise');
+require('dotenv').config();
 
 // Database connection configuration
 const dbConfig = {
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'botuser',
-    password: process.env.DB_PASS,
-    database: process.env.DB_NAME || 'discord_bot',
+    host: process.env.BOT_DB_HOST || 'localhost',
+    user: process.env.BOT_DB_USER || 'chester_bot',
+    password: process.env.BOT_DB_PASSWORD,
+    database: process.env.BOT_DB_NAME || 'chester_bot',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0

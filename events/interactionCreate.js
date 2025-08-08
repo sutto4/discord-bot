@@ -2,6 +2,7 @@ const { Events, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, Ac
 const { verifyRoleId } = require('../config/roles');
 const { logToChannel } = require('../helpers/logger');
 const { logFeedbackToChannel } = require('../helpers/feedbackLogger');
+const { GuildDatabase } = require('../config/database-multi-guild');
 
 module.exports = {
 	name: Events.InteractionCreate,
@@ -29,6 +30,14 @@ module.exports = {
 			await logToChannel(
 				interaction.guild,
 				`<@${interaction.user.id}> tried to verify: **${success ? 'Success' : 'Failed'}**`
+			);
+
+			// 📊 Log verification to database
+			await GuildDatabase.logVerification(
+				interaction.guild.id,
+				interaction.user.id,
+				interaction.user.tag,
+				success
 			);
 		}
 
@@ -137,6 +146,17 @@ module.exports = {
 						ephemeral: true
 					});
 				}
+
+				// 📊 Log feedback to database
+				await GuildDatabase.logFeedback(
+					interaction.guild.id,
+					interaction.user.id,
+					interaction.user.tag,
+					feedbackType,
+					subject,
+					details,
+					contact
+				);
 			} catch (error) {
 				console.error('Error processing feedback:', error);
 				await interaction.reply({

@@ -1,12 +1,12 @@
-const db = require('../config/database');
+const { fivemDb, botDb } = require('../config/database');
 const { donatorRoleMapping } = require('../config/roles');
-const applyDonatorRole = require('../helpers/applyDonatorRole');
+const { applyDonatorRole } = require('../helpers/applyDonatorRole');
 
 async function syncDonators(client) {
 	console.log('[SYNC] Starting donator sync process');
 	try {
 		console.log('[SYNC] Querying database for active donator accounts...');
-		const [rows] = await db.query(`
+		const [rows] = await fivemDb.query(`
 			SELECT a.discord 
 			FROM fivem_live.tebex_accounts ta
 			JOIN fivem_live.accounts a ON a.accountid = ta.accountid
@@ -38,7 +38,7 @@ async function syncDonators(client) {
 				const member = guild.members.cache.get(discordId);
 				if (member) {
 					found++;
-					await applyDonatorRole(member, db, donatorRoleMapping);
+					await applyDonatorRole(member, fivemDb, donatorRoleMapping);
 				}
 				processed++;
 				

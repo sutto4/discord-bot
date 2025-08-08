@@ -137,14 +137,11 @@ class GuildDatabase {
 
     // Check if guild has a specific feature enabled
     static async hasFeature(guildId, featureName) {
-        const query = 'SELECT features FROM guilds WHERE guild_id = ?';
+        const query = 'SELECT enabled FROM guild_features WHERE guild_id = ? AND feature_name = ?';
         
         try {
-            const [rows] = await pool.execute(query, [guildId]);
-            if (rows.length === 0) return false;
-            
-            const features = rows[0].features ? JSON.parse(rows[0].features) : {};
-            return features[featureName] === true;
+            const [rows] = await pool.execute(query, [guildId, featureName]);
+            return rows.length > 0 && rows[0].enabled === 1;
         } catch (error) {
             console.error('Error checking guild feature:', error);
             return false;
@@ -153,17 +150,16 @@ class GuildDatabase {
 
     // Enable/disable a feature for a guild
     static async setFeature(guildId, featureName, enabled) {
-        const query = 'SELECT features FROM guilds WHERE guild_id = ?';
+        const query = `
+            INSERT INTO guild_features (guild_id, feature_name, enabled) 
+            VALUES (?, ?, ?) 
+            ON DUPLICATE KEY UPDATE 
+                enabled = VALUES(enabled),
+                updated_at = CURRENT_TIMESTAMP
+        `;
         
         try {
-            const [rows] = await pool.execute(query, [guildId]);
-            const currentFeatures = rows.length > 0 && rows[0].features ? JSON.parse(rows[0].features) : {};
-            
-            currentFeatures[featureName] = enabled;
-            
-            const updateQuery = 'UPDATE guilds SET features = ?, updated_at = CURRENT_TIMESTAMP WHERE guild_id = ?';
-            await pool.execute(updateQuery, [JSON.stringify(currentFeatures), guildId]);
-            
+            await pool.execute(query, [guildId, featureName, enabled]);
             console.log(`Guild ${guildId} feature '${featureName}' ${enabled ? 'enabled' : 'disabled'}`);
         } catch (error) {
             console.error('Error setting guild feature:', error);
@@ -172,21 +168,182 @@ class GuildDatabase {
 
     // Get guilds with a specific feature enabled
     static async getGuildsWithFeature(featureName) {
-        const query = 'SELECT guild_id, guild_name, features FROM guilds WHERE features IS NOT NULL';
+        const query = `
+            SELECT g.guild_id, g.guild_name 
+            FROM guilds g
+            INNER JOIN guild_features gf ON g.guild_id = gf.guild_id
+            WHERE gf.feature_name = ? AND gf.enabled = 1
+        `;
         
         try {
-            const [rows] = await pool.execute(query);
-            return rows.filter(row => {
-                try {
-                    const features = JSON.parse(row.features);
-                    return features[featureName] === true;
-                } catch {
-                    return false;
-                }
-            });
+            const [rows] = await pool.execute(query, [featureName]);
+            return rows;
         } catch (error) {
             console.error('Error getting guilds with feature:', error);
             return [];
+        }
+    }
+
+    // Get all features for a specific guild
+    static async getGuildFeatures(guildId) {
+        const query = 'SELECT feature_name, enabled FROM guild_features WHERE guild_id = ?';
+        
+        try {
+            const [rows] = await pool.execute(query, [guildId]);
+            const features = {};
+            rows.forEach(row => {
+                features[row.feature_name] = row.enabled === 1;
+            });
+            return features;
+        } catch (error) {
+            console.error('Error getting guild features:', error);
+            return {};
+        }
+    }
+
+    // Set guild package (enables all features in that package)
+    static async setGuildPackage(guildId, packageName) {
+        try {
+            // Get features for this package level
+            const query = `
+                SELECT feature_key FROM features 
+                WHERE is_active = 1 AND (
+                    minimum_package = 'free' OR
+                    (minimum_package = 'premium' AND ? = 'premium')
+                )
+            `;
+            
+            const [features] = await pool.execute(query, [packageName]);
+            
+            // First, disable all features for this guild
+            await pool.execute('DELETE FROM guild_features WHERE guild_id = ?', [guildId]);
+            
+            // Then enable features for the selected package
+            if (features.length > 0) {
+                const values = features.map(feature => [guildId, feature.feature_key, 1]);
+                const placeholders = values.map(() => '(?, ?, ?)').join(', ');
+                const flatValues = values.flat();
+                
+                await pool.execute(
+                    `INSERT INTO guild_features (guild_id, feature_name, enabled) VALUES ${placeholders}`,
+                    flatValues
+                );
+            }
+            
+            const featureNames = features.map(f => f.feature_key).join(', ');
+            console.log(`Guild ${guildId} set to ${packageName} package with features: ${featureNames}`);
+            return true;
+        } catch (error) {
+            console.error('Error setting guild package:', error);
+            return false;
+        }
+    }
+
+    // Get guild's current package
+    static async getGuildPackage(guildId) {
+        try {
+            const features = await this.getGuildFeatures(guildId);
+            const enabledFeatures = Object.keys(features).filter(key => features[key]);
+            
+            // Check what package this guild should have based on enabled features
+            const packages = ['premium', 'free'];
+            
+            for (const packageName of packages) {
+                const query = `
+                    SELECT feature_key FROM features 
+                    WHERE is_active = 1 AND (
+                        minimum_package = 'free' OR
+                        (minimum_package = 'premium' AND ? = 'premium')
+                    )
+                `;
+                
+                const [packageFeatures] = await pool.execute(query, [packageName]);
+                const packageFeatureKeys = packageFeatures.map(f => f.feature_key);
+                
+                // Check if enabled features match this package
+                if (packageFeatureKeys.length === enabledFeatures.length && 
+                    packageFeatureKeys.every(feature => enabledFeatures.includes(feature))) {
+                    return packageName;
+                }
+            }
+            
+            return 'custom'; // If features don't match any standard package
+        } catch (error) {
+            console.error('Error getting guild package:', error);
+            return 'free';
+        }
+    }
+
+    // Get available packages and their features from database
+    static async getAvailablePackages() {
+        try {
+            const packages = {
+                'free': { name: 'Free', price: '$0/month', features: [] },
+                'premium': { name: 'Premium', price: '$15/month', features: [] }
+            };
+
+            // Get features for each package
+            for (const packageName of Object.keys(packages)) {
+                const query = `
+                    SELECT feature_key, feature_name FROM features 
+                    WHERE is_active = 1 AND (
+                        minimum_package = 'free' OR
+                        (minimum_package = 'premium' AND ? = 'premium')
+                    )
+                `;
+                
+                const [features] = await pool.execute(query, [packageName]);
+                packages[packageName].features = features.map(f => ({
+                    key: f.feature_key,
+                    name: f.feature_name
+                }));
+            }
+
+            return packages;
+        } catch (error) {
+            console.error('Error getting available packages:', error);
+            return {
+                'free': { name: 'Free', price: '$0/month', features: [] }
+            };
+        }
+    }
+
+    // Get all available features
+    static async getAllFeatures() {
+        try {
+            const [features] = await pool.execute(
+                'SELECT * FROM features WHERE is_active = 1 ORDER BY minimum_package, feature_name'
+            );
+            return features;
+        } catch (error) {
+            console.error('Error getting all features:', error);
+            return [];
+        }
+    }
+
+    // Update feature configuration
+    static async updateFeature(featureKey, updates) {
+        try {
+            const fields = [];
+            const values = [];
+            
+            for (const [key, value] of Object.entries(updates)) {
+                fields.push(`${key} = ?`);
+                values.push(value);
+            }
+            
+            values.push(featureKey);
+            
+            await pool.execute(
+                `UPDATE features SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE feature_key = ?`,
+                values
+            );
+            
+            console.log(`Feature ${featureKey} updated`);
+            return true;
+        } catch (error) {
+            console.error('Error updating feature:', error);
+            return false;
         }
     }
 }

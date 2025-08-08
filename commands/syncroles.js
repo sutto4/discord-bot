@@ -3,6 +3,7 @@ const {
 	PermissionFlagsBits
 } = require('discord.js');
 const syncDonators = require('../jobs/syncDonators');
+const { GuildDatabase } = require('../config/database-multi-guild');
 
 module.exports = {
 	data: new SlashCommandBuilder()
@@ -12,7 +13,17 @@ module.exports = {
 
 	async execute(interaction) {
 		console.log('[SYNC CMD] Command started');
-		await interaction.deferReply({ flags: 64 });
+		
+		// Check if guild has FDG donator sync feature enabled
+		const hasFeature = await GuildDatabase.hasFeature(interaction.guild.id, 'fdg_donator_sync');
+		if (!hasFeature) {
+			return await interaction.reply({
+				content: '❌ **FDG Donator Sync is not enabled for this server.**\n\nThis is a premium feature. Contact support to upgrade your package.',
+				ephemeral: true
+			});
+		}
+		
+		await interaction.deferReply({ ephemeral: true });
 		console.log('[SYNC CMD] Deferred reply sent');
 
 		try {

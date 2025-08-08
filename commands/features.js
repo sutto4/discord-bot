@@ -4,91 +4,61 @@ const { GuildDatabase } = require('../config/database-multi-guild');
 module.exports = {
 	data: new SlashCommandBuilder()
 		.setName('features')
-		.setDescription('Manage premium features for this guild')
-		.addSubcommand(subcommand =>
-			subcommand
-				.setName('enable')
-				.setDescription('Enable a premium feature for this guild')
-				.addStringOption(option =>
-					option.setName('feature')
-						.setDescription('The feature to enable')
-						.setRequired(true)
-						.addChoices(
-							{ name: 'Tebex Integration', value: 'tebex_integration' },
-							{ name: 'Advanced Logging', value: 'advanced_logging' },
-							{ name: 'Custom Roles', value: 'custom_roles' }
-						)))
-		.addSubcommand(subcommand =>
-			subcommand
-				.setName('disable')
-				.setDescription('Disable a premium feature for this guild')
-				.addStringOption(option =>
-					option.setName('feature')
-						.setDescription('The feature to disable')
-						.setRequired(true)
-						.addChoices(
-							{ name: 'Tebex Integration', value: 'tebex_integration' },
-							{ name: 'Advanced Logging', value: 'advanced_logging' },
-							{ name: 'Custom Roles', value: 'custom_roles' }
-						)))
-		.addSubcommand(subcommand =>
-			subcommand
-				.setName('list')
-				.setDescription('Show enabled premium features for this guild'))
+		.setDescription('View premium features for this guild')
 		.setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
 	async execute(interaction) {
-		const subcommand = interaction.options.getSubcommand();
 		const guildId = interaction.guild.id;
 		const guildName = interaction.guild.name;
 
 		// Initialize guild if not exists
 		await GuildDatabase.initializeGuild(guildId, guildName);
 
-		if (subcommand === 'enable') {
-			const feature = interaction.options.getString('feature');
-			await GuildDatabase.setFeature(guildId, feature, true);
-			
-			const featureNames = {
-				'tebex_integration': 'Tebex Integration',
-				'advanced_logging': 'Advanced Logging',
-				'custom_roles': 'Custom Roles'
-			};
-			
-			await interaction.reply({
-				content: `✅ **${featureNames[feature]}** has been **enabled** for this guild.\n\n💡 This premium feature is now active and will take effect immediately.`,
-				flags: 64
-			});
+		// Get current package and features
+		const currentPackage = await GuildDatabase.getGuildPackage(guildId);
+		const packages = await GuildDatabase.getAvailablePackages();
+		const features = await GuildDatabase.getGuildFeatures(guildId);
+		const allFeatures = await GuildDatabase.getAllFeatures();
 
-		} else if (subcommand === 'disable') {
-			const feature = interaction.options.getString('feature');
-			await GuildDatabase.setFeature(guildId, feature, false);
-			
-			const featureNames = {
-				'tebex_integration': 'Tebex Integration',
-				'advanced_logging': 'Advanced Logging',
-				'custom_roles': 'Custom Roles'
-			};
-			
-			await interaction.reply({
-				content: `❌ **${featureNames[feature]}** has been **disabled** for this guild.`,
-				flags: 64
-			});
+		let statusText = `**${guildName} - Current Package: ${packages[currentPackage]?.name || 'Custom'}**\n\n`;
+		
+		// Show current features grouped by package level
+		const featuresByPackage = {
+			'free': [],
+			'premium': []
+		};
 
-		} else if (subcommand === 'list') {
-			const config = await GuildDatabase.getGuildConfig(guildId);
-			const features = config?.features ? JSON.parse(config.features) : {};
-			
-			const featureList = [
-				`🔗 **Tebex Integration**: ${features.tebex_integration ? '✅ Enabled' : '❌ Disabled'}`,
-				`📊 **Advanced Logging**: ${features.advanced_logging ? '✅ Enabled' : '❌ Disabled'}`,
-				`🎭 **Custom Roles**: ${features.custom_roles ? '✅ Enabled' : '❌ Disabled'}`
-			].join('\n');
+		allFeatures.forEach(feature => {
+			if (featuresByPackage[feature.minimum_package]) {
+				featuresByPackage[feature.minimum_package].push({
+					key: feature.feature_key,
+					name: feature.feature_name,
+					enabled: features[feature.feature_key] || false
+				});
+			}
+		});
 
-			await interaction.reply({
-				content: `**Premium Features for ${guildName}**\n\n${featureList}\n\n💰 Contact support to enable additional features.`,
-				flags: 64
-			});
+		for (const [packageLevel, packageFeatures] of Object.entries(featuresByPackage)) {
+			if (packageFeatures.length > 0) {
+				statusText += `**${packageLevel.charAt(0).toUpperCase() + packageLevel.slice(1)} Features:**\n`;
+				packageFeatures.forEach(feature => {
+					statusText += `${feature.enabled ? '✅' : '❌'} ${feature.name}\n`;
+				});
+				statusText += '\n';
+			}
 		}
+
+		statusText += '**Available Packages:**\n';
+		for (const [key, pkg] of Object.entries(packages)) {
+			const current = currentPackage === key ? ' **(CURRENT)**' : '';
+			statusText += `• **${pkg.name}** - ${pkg.price}${current}\n`;
+		}
+
+		statusText += '\n*Package upgrades are managed by bot administrators. Contact support for premium features.*';
+
+		await interaction.reply({
+			content: statusText,
+			ephemeral: true
+		});
 	},
 };

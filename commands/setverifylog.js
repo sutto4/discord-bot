@@ -39,7 +39,7 @@ module.exports = {
 		saveChannel(interaction.guild.id, channel.id);
 		await interaction.reply({
             content: `✅ Verification logs will now go to <#${channel.id}>`,
-            flags: 64 // ✅ Ephemeral
+            ephemeral: true // ✅ Ephemeral
         });
 	}
 };

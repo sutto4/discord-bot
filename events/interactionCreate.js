@@ -24,14 +24,14 @@ module.exports = {
 				await interaction.member.roles.add(verifyRole);
 				await interaction.reply({
 					content: '✅ You have been verified!',
-					flags: 64
+					ephemeral: true
 				});
 				success = true;
 			} catch (err) {
 				console.error('Failed to assign verify role:', err);
 				await interaction.reply({
 					content: '❌ Could not verify you.',
-					flags: 64
+					ephemeral: true
 				});
 			}
 
@@ -466,7 +466,7 @@ module.exports = {
 				await command.execute(interaction);
 			} catch (error) {
 				console.error(error);
-				await interaction.reply({ content: '❌ Command failed.', flags: 64 });
+				await interaction.reply({ content: '❌ Command failed.', ephemeral: true });
 			}
 		}
 	}

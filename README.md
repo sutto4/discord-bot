@@ -7,6 +7,7 @@ A comprehensive Discord bot for managing donator roles, verification, server inf
 - **🔐 Verification System**: Button-based verification with role assignment
 - **💰 Donator Role Management**: Automated role sync based on Tebex donations
 - **🎮 Server Information**: Quick connect commands and store information
+- **📡 FiveM Server Monitoring**: Track server status and online players
 - **📝 Feedback System**: Modal-based feedback collection with configurable channels
 - **📊 Logging**: Verification, role assignment, and feedback logging
 - **⚡ Slash Commands**: Modern Discord slash command support
@@ -21,6 +22,10 @@ A comprehensive Discord bot for managing donator roles, verification, server inf
 - `/setverifylog <channel>` - Set the shared log channel for verification and moderation
 - `/setfeedbackchannel <channel>` - Set feedback submissions channel
 - `/syncroles` - Manually sync donator roles
+- `/setfivemserver <address>` - Set FiveM server to monitor (admin)
+- `/fivemstatus` - Display configured server status
+- `/fivemplayers [list]` - Show player count or list names
+- `/findfivemplayer <name>` - Find a player by name on the server
 
 ### Dot Commands
 - `.tebex` - Display Tebex store information with donation button

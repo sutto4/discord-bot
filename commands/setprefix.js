@@ -1,45 +1,43 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const { isValidPrefix, setGuildPrefix, getGuildPrefix } = require('../utils/prefix');
-const { hasFeature } = require('../utils/premium');
+const { SlashCommandBuilder } = require('discord.js');
+const db = require('../utils/database');
+const hasFeature = require('../utils/premium');
 
 module.exports = {
 	data: new SlashCommandBuilder()
 		.setName('setprefix')
-		.setDescription('Set the message command prefix for this server (requires premium).')
-		.addStringOption(opt =>
-			opt.setName('prefix')
-				.setDescription('New prefix (1–5 visible characters, e.g., ., !, ?)')
+		.setDescription('Set a custom dot command prefix for this server')
+		.addStringOption(option =>
+			option.setName('prefix')
+				.setDescription('The new prefix (e.g. . ! ?)')
 				.setRequired(true)
-		)
-		.setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
+		),
 	async execute(interaction) {
-		const guildId = interaction.guild?.id;
-		if (!guildId) {
-			return interaction.reply({ content: 'Guild-only command.', ephemeral: true });
-		}
+		const guildId = interaction.guild.id;
+		const newPrefix = interaction.options.getString('prefix');
 
-		const isPremium = await hasFeature(guildId, 'prefix');
+		// Check premium feature access
+		const isPremium = await hasFeature(guildId, 'custom_prefix');
 		if (!isPremium) {
-			const current = await getGuildPrefix(guildId);
-			return interaction.reply({
-				content: `❌ This server does not have access to custom prefixes.\nCurrent prefix: \`${current}\``,
+			return await interaction.reply({
+				content: '❌ This is a premium feature. Upgrade to unlock it.',
 				ephemeral: true
 			});
 		}
 
-		const requested = interaction.options.getString('prefix', true);
-		if (!isValidPrefix(requested)) {
-			return interaction.reply({
-				content: '❌ Invalid prefix. Use 1–5 visible characters (no spaces). Examples: ".", "!", ">>".',
+		try {
+			await db.query(`
+				UPDATE guilds
+				SET custom_prefix = ?
+				WHERE guild_id = ?
+			`, [newPrefix, guildId]);
+
+			await interaction.reply(`✅ Custom prefix updated to \`${newPrefix}\``);
+		} catch (err) {
+			console.error('[PREFIX UPDATE ERROR]', err);
+			await interaction.reply({
+				content: '❌ Failed to update prefix.',
 				ephemeral: true
 			});
 		}
-
-		await setGuildPrefix(guildId, requested);
-		return interaction.reply({
-			content: `✅ Prefix updated to \`${requested}\`.`,
-			ephemeral: true
-		});
 	}
 };

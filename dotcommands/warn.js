@@ -1,37 +1,27 @@
 const { PermissionFlagsBits } = require('discord.js');
-const { logModerationAction } = require('../../utils/moderation');
+const { logModerationAction } = require('../utils/moderation');
 
 module.exports = {
 	name: 'warn',
 	description: 'Issue a warning to a member',
 	usage: '.warn @user <reason>',
-
 	async execute(message, args) {
 		if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-			return message.reply('You do not have permission for this command.');
+			return message.reply('You lack permission.');
 		}
-
-		if (args.length < 2) {
-			return message.reply('Usage: `.warn @user <reason>`');
-		}
+		if (args.length < 2) return message.reply('Usage: ' + this.usage);
 
 		const targetUser = message.mentions.users.first();
-		if (!targetUser) {
-			return message.reply('Please mention a user to warn.');
-		}
+		if (!targetUser) return message.reply('Mention a user.');
 
 		const reason = args.slice(1).join(' ');
+		if (!reason) return message.reply('Provide a reason.');
+
 		const member = await message.guild.members.fetch(targetUser.id).catch(() => null);
 		if (!member) return message.reply('Member not found.');
 
-		// Try to DM the user
-		try {
-			await targetUser.send(`⚠️ You received a warning in **${message.guild.name}**: ${reason}`);
-		} catch (error) {
-			// User has DMs disabled or blocked the bot
-		}
-
+		await targetUser.send(`⚠️ Warning in ${message.guild.name}: ${reason}`).catch(() => null);
 		await logModerationAction(message.guild, 'warn', message.author, member, reason);
-		return message.reply(`✅ Warned ${targetUser.tag}.`);
+		return message.reply(`Warned ${targetUser.tag}.`);
 	}
 };

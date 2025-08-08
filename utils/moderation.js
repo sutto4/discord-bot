@@ -2,15 +2,13 @@ const { EmbedBuilder } = require('discord.js');
 
 function parseDuration(input) {
 	if (!input) return null;
-	const match = String(input).trim().match(/^(\d+)\s*([mhd])$/i);
+	const match = String(input).trim().match(/^(\d+)\s*([smhd])$/i); // allow seconds 's'
 	if (!match) return null;
-	
 	const value = parseInt(match[1], 10);
 	const unit = match[2].toLowerCase();
-	
 	if (value <= 0) return null;
-	
 	switch (unit) {
+		case 's': return value * 1000;
 		case 'm': return value * 60 * 1000;
 		case 'h': return value * 60 * 60 * 1000;
 		case 'd': return value * 24 * 60 * 60 * 1000;
@@ -18,36 +16,46 @@ function parseDuration(input) {
 	}
 }
 
+function sanitize(text, fallback = 'N/A') {
+	const v = (text ?? '').toString().trim();
+	return v.length ? (v.length > 900 ? v.slice(0, 897) + '...' : v) : fallback;
+}
+
 async function logModerationAction(guild, action, moderatorUser, targetMember, reason, durationLabel) {
 	try {
-		// Get log channel from guild config
 		const { getLogChannelId } = require('./guildConfig');
 		const logChannelId = await getLogChannelId(guild.id);
-		
 		if (!logChannelId) return;
-		
-		const logChannel = guild.channels.cache.get(logChannelId) || 
+		const logChannel = guild.channels.cache.get(logChannelId) ||
 			await guild.channels.fetch(logChannelId).catch(() => null);
-		
 		if (!logChannel) return;
-		
 		const embed = new EmbedBuilder()
 			.setTitle(`🔨 Moderation: ${action.toUpperCase()}`)
 			.setColor(getActionColor(action))
 			.addFields(
-				{ name: 'Target', value: `${targetMember.user.tag} (${targetMember.id})`, inline: true },
-				{ name: 'Moderator', value: `${moderatorUser.tag} (${moderatorUser.id})`, inline: true },
-				{ name: 'Reason', value: reason || 'No reason provided', inline: false }
+				{
+					name: 'Target',
+					value: targetMember
+						? `${sanitize(targetMember.user.tag)} (${targetMember.id})`
+						: 'Unknown',
+					inline: true
+				},
+				{
+					name: 'Moderator',
+					value: moderatorUser
+						? `${sanitize(moderatorUser.tag)} (${moderatorUser.id})`
+						: 'Unknown',
+					inline: true
+				},
+				{ name: 'Reason', value: sanitize(reason, 'No reason provided'), inline: false }
 			)
 			.setTimestamp();
-		
 		if (durationLabel) {
-			embed.addFields({ name: 'Duration', value: durationLabel, inline: true });
+			embed.addFields({ name: 'Duration', value: sanitize(durationLabel), inline: true });
 		}
-		
-		await logChannel.send({ embeds: [embed] });
-	} catch (error) {
-		console.error('Failed to log moderation action:', error);
+		await logChannel.send({ embeds: [embed] }).catch(() => null);
+	} catch (err) {
+		console.error('Failed to log moderation action:', err);
 	}
 }
 

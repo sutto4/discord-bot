@@ -30,6 +30,6 @@ module.exports = {
 		}
 
 		await logModerationAction(message.guild, 'warn', message.author, member, reason);
-		return message.reply(`${targetUser.tag} has been warned by ${message.author.tag} for ${reason}.`);
+		return message.reply(`<@${targetUser.id}> has been warned by <@${message.author.id}> for ${reason}.`);
 	}
 };

@@ -40,6 +40,6 @@ module.exports = {
 		} catch {}
 
 		await logModerationAction(message.guild, 'mute', message.author, member, reason, durationStr);
-		return message.reply(`${targetUser.tag} has been muted by ${message.author.tag} for ${durationStr} for ${reason}.`);
+		return message.reply(`<@${targetUser.id}> has been muted by <@${message.author.id}> for ${durationStr} for ${reason}.`);
 	}
 };

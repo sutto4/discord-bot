@@ -29,27 +29,24 @@ async function logModerationAction(guild, action, moderatorUser, targetMember, r
 		const logChannel = guild.channels.cache.get(logChannelId) ||
 			await guild.channels.fetch(logChannelId).catch(() => null);
 		if (!logChannel) return;
+
+		const targetValue = targetMember
+			? `<@${targetMember.id}> (${sanitize(targetMember.user.tag)})`
+			: 'Unknown';
+		const modValue = moderatorUser
+			? `<@${moderatorUser.id}> (${sanitize(moderatorUser.tag)})`
+			: 'Unknown';
+
 		const embed = new EmbedBuilder()
 			.setTitle(`🔨 Moderation: ${action.toUpperCase()}`)
 			.setColor(getActionColor(action))
 			.addFields(
-				{
-					name: 'Target',
-					value: targetMember
-						? `${sanitize(targetMember.user.tag)} (${targetMember.id})`
-						: 'Unknown',
-					inline: true
-				},
-				{
-					name: 'Moderator',
-					value: moderatorUser
-						? `${sanitize(moderatorUser.tag)} (${moderatorUser.id})`
-						: 'Unknown',
-					inline: true
-				},
+				{ name: 'Target', value: targetValue, inline: true },
+				{ name: 'Moderator', value: modValue, inline: true },
 				{ name: 'Reason', value: sanitize(reason, 'No reason provided'), inline: false }
 			)
 			.setTimestamp();
+
 		if (durationLabel) {
 			embed.addFields({ name: 'Duration', value: sanitize(durationLabel), inline: true });
 		}

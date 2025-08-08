@@ -28,7 +28,7 @@ module.exports = {
 				await targetUser.send({ embeds: [dmEmbed] });
 			} catch {}
 			await logModerationAction(message.guild, 'kick', message.author, member, reason);
-			return message.reply(`${targetUser.tag} has been kicked by ${message.author.tag} for ${reason}.`);
+			return message.reply(`<@${targetUser.id}> has been kicked by <@${message.author.id}> for ${reason}.`);
 		} catch {
 			return message.reply('Failed to kick member.');
 		}

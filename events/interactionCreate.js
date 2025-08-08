@@ -1,5 +1,4 @@
 const { Events, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ChannelSelectMenuBuilder, ChannelType, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { verifyRoleId } = require('../config/roles');
 const { logToChannel } = require('../helpers/logger');
 const { logFeedbackToChannel } = require('../helpers/feedbackLogger');
 const { GuildDatabase } = require('../config/database-multi-guild');
@@ -12,7 +11,17 @@ module.exports = {
 			let success = false;
 
 			try {
-				await interaction.member.roles.add(verifyRoleId);
+				// Find or create the verify role
+				let verifyRole = interaction.guild.roles.cache.find(role => role.name === 'Verified');
+				if (!verifyRole) {
+					verifyRole = await interaction.guild.roles.create({
+						name: 'Verified',
+						color: 0x00ff00,
+						reason: 'Auto-created verify role by Chester Bot'
+					});
+				}
+
+				await interaction.member.roles.add(verifyRole);
 				await interaction.reply({
 					content: '✅ You have been verified!',
 					flags: 64

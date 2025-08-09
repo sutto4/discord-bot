@@ -1,4 +1,3 @@
-const { SlashCommandBuilder } = require('discord.js');
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { getServer, fetchServerData } = require('../utils/fivem');
 
@@ -45,7 +44,6 @@ module.exports = {
                         .setTimestamp();
 
                 await interaction.reply({
-                        content: `**${name}**\nStatus: Online\nPlayers: ${count}/${max}\nVersion: ${version}`,
                         embeds: [embed],
                         flags: 64
                 });

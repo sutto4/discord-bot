@@ -26,9 +26,9 @@ module.exports = {
                 const name = info?.hostname || info?.vars?.sv_projectName || info?.vars?.sv_hostname || 'Unknown';
                 const count = Array.isArray(players) ? players.length : (info?.clients ?? 0);
                 const max = info?.sv_maxclients || info?.vars?.sv_maxclients || count;
-                const version = info?.version || 'Unknown';
-                const map = info?.mapname || info?.vars?.mapname || 'Unknown';
-                const gametype = info?.gametype || info?.vars?.gametype || 'Unknown';
+                const version = String(info?.version ?? 'Unknown');
+                const map = String(info?.mapname ?? info?.vars?.mapname ?? 'Unknown');
+                const gametype = String(info?.gametype ?? info?.vars?.gametype ?? 'Unknown');
 
                 const embed = new EmbedBuilder()
                         .setTitle(name)

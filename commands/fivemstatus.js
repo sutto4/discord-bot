@@ -1,4 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { getServer, fetchServerData } = require('../utils/fivem');
 
 module.exports = {
@@ -27,9 +28,25 @@ module.exports = {
                 const count = Array.isArray(players) ? players.length : (info?.clients ?? 0);
                 const max = info?.sv_maxclients || info?.vars?.sv_maxclients || count;
                 const version = info?.version || 'Unknown';
+                const map = info?.mapname || info?.vars?.mapname || 'Unknown';
+                const gametype = info?.gametype || info?.vars?.gametype || 'Unknown';
+
+                const embed = new EmbedBuilder()
+                        .setTitle(name)
+                        .setColor(0x2ecc71)
+                        .addFields(
+                                { name: 'Status', value: 'Online', inline: true },
+                                { name: 'Players', value: `${count}/${max}`, inline: true },
+                                { name: 'Version', value: version, inline: true },
+                                { name: 'Map', value: map, inline: true },
+                                { name: 'Game Type', value: gametype, inline: true },
+                                { name: 'Direct Connect', value: `fivem://connect/${address}`, inline: false }
+                        )
+                        .setTimestamp();
 
                 await interaction.reply({
                         content: `**${name}**\nStatus: Online\nPlayers: ${count}/${max}\nVersion: ${version}`,
+                        embeds: [embed],
                         flags: 64
                 });
         },

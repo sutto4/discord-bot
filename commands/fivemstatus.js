@@ -29,6 +29,9 @@ module.exports = {
                 const version = String(info?.version ?? 'Unknown');
                 const map = String(info?.mapname ?? info?.vars?.mapname ?? 'Unknown');
                 const gametype = String(info?.gametype ?? info?.vars?.gametype ?? 'Unknown');
+                const uptime = String(info?.Uptime ?? 'Unknown');
+                const reserved = String(info?.sv_reservedslots ?? 'Unknown');
+
 
                 const embed = new EmbedBuilder()
                         .setTitle(name)
@@ -36,9 +39,11 @@ module.exports = {
                         .addFields(
                                 { name: 'Status', value: 'Online', inline: true },
                                 { name: 'Players', value: `${count}/${max}`, inline: true },
+                                { name: 'Reserved Slots', value: reserved, inline: true },
                                 { name: 'Version', value: version, inline: true },
                                 { name: 'Map', value: map, inline: true },
                                 { name: 'Game Type', value: gametype, inline: true },
+                                { name: 'Uptime', value: uptime, inline: true },
                                 { name: 'Direct Connect', value: `fivem://connect/${address}`, inline: false }
                         )
                         .setTimestamp();

@@ -6,7 +6,7 @@ module.exports = {
                 .setName('fivemstatus')
                 .setDescription('Display status of the configured FiveM server'),
         async execute(interaction) {
-                const address = getServer(interaction.guild.id);
+                const address = await getServer(interaction.guild.id);
                 if (!address) {
                         return interaction.reply({
                                 content: '❌ No FiveM server configured. Use `/setfivemserver` first.',

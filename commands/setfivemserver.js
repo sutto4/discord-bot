@@ -13,7 +13,7 @@ module.exports = {
         async execute(interaction) {
                 const address = interaction.options.getString('address', true);
                 try {
-                        setServer(interaction.guild.id, address);
+                        await setServer(interaction.guild.id, address);
                         await interaction.reply({
                                 content: `✅ FiveM server set to \`${address}\``,
                                 flags: 64

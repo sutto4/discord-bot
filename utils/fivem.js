@@ -1,35 +1,15 @@
-const fs = require('fs');
-const path = require('path');
+const { GuildDatabase } = require('../config/database-multi-guild');
 
-const configPath = path.join(__dirname, '../data/fivem_servers.json');
-
-function loadConfig() {
-        try {
-                if (!fs.existsSync(configPath)) return {};
-                const raw = fs.readFileSync(configPath, 'utf8');
-                return JSON.parse(raw || '{}') || {};
-        } catch {
-                return {};
-        }
+async function setServer(guildId, address) {
+        if (!guildId) throw new Error('guildId required');
+        await GuildDatabase.updateGuildConfig(guildId, { fivem_server: address });
+        return address;
 }
 
-function saveConfig(config) {
-        const dir = path.dirname(configPath);
-        if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
-        }
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-}
-
-function setServer(guildId, address) {
-        const config = loadConfig();
-        config[guildId] = address;
-        saveConfig(config);
-}
-
-function getServer(guildId) {
-        const config = loadConfig();
-        return config[guildId] || null;
+async function getServer(guildId) {
+        if (!guildId) return null;
+        const config = await GuildDatabase.getGuildConfig(guildId);
+        return config?.fivem_server || null;
 }
 
 async function fetchServerData(address) {
@@ -65,4 +45,3 @@ module.exports = {
         getServer,
         fetchServerData
 };
-

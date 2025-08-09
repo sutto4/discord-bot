@@ -9,7 +9,7 @@ module.exports = {
                         option.setName('list')
                                 .setDescription('Show a full list of player names')), 
         async execute(interaction) {
-                const address = getServer(interaction.guild.id);
+                const address = await getServer(interaction.guild.id);
                 if (!address) {
                         return interaction.reply({
                                 content: '❌ No FiveM server configured. Use `/setfivemserver` first.',

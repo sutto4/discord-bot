@@ -43,7 +43,7 @@ module.exports = function startServer(client) {
 
       // Load external groups
       const [extGroups] = await fivemDb.query(
-        'SELECT accountid, `group` FROM external_groups'
+        'SELECT accountid, `group` FROM accounts_groups'
       );
       extGroups.forEach(g => {
         const entry = accountMap.get(String(g.accountid));

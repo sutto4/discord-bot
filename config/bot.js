@@ -50,3 +50,5 @@ client.once('ready', async () => {
 
 // Login using bot token from .env
 client.login(process.env.TOKEN);
+
+module.exports = client;

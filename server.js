@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const { fivemDb } = require('./config/database');
 
@@ -6,28 +5,31 @@ module.exports = function startServer(client) {
 	const app = express();
 	const PORT = process.env.PORT || 3001;
 
+	// CORS
 	app.use((req, res, next) => {
 		res.setHeader('Access-Control-Allow-Origin', '*');
 		next();
 	});
 
-	// ---- ROUTER mounted at "/" AND "/api" ----
-	const router = express.Router();
-
-	// List guilds (the one your UI calls)
-	router.get('/guilds', async (_req, res) => {
+	// -------------------
+	// NEW: List all guilds
+	// -------------------
+	app.get('/api/guilds', (_req, res) => {
 		try {
-			const list = await Promise.all(
-				client.guilds.cache.map(async g => ({ id: g.id, name: g.name }))
-			);
+			const list = client.guilds.cache.map(g => ({
+				id: g.id,
+				name: g.name
+			}));
 			res.json(list);
 		} catch (err) {
 			res.status(500).json({ error: err.message });
 		}
 	});
 
+	// -----------------------
 	// Fetch roles for a guild
-	router.get('/guilds/:guildId/roles', async (req, res) => {
+	// -----------------------
+	app.get('/api/guilds/:guildId/roles', async (req, res) => {
 		try {
 			const guild = await client.guilds.fetch(req.params.guildId);
 			await guild.roles.fetch();
@@ -43,25 +45,31 @@ module.exports = function startServer(client) {
 		}
 	});
 
-	// Fetch members for a guild with optional filtering
-	router.get('/guilds/:guildId/members', async (req, res) => {
+	// -------------------------
+	// Fetch members for a guild
+	// -------------------------
+	app.get('/api/guilds/:guildId/members', async (req, res) => {
 		try {
 			const { q, role, group } = req.query;
 			const guild = await client.guilds.fetch(req.params.guildId);
 			await guild.members.fetch();
 
+			// Map Discord IDs to account IDs
 			const [accounts] = await fivemDb.query(
 				"SELECT accountid, REPLACE(discord, 'discord:', '') AS discord FROM accounts WHERE discord IS NOT NULL"
 			);
 			const accountMap = new Map();
 			accounts.forEach(r => accountMap.set(r.discord, { accountid: String(r.accountid), groups: [] }));
 
+			// Load external groups
 			const [extGroups] = await fivemDb.query(
 				'SELECT accountid, `group` FROM accounts_groups'
 			);
 			extGroups.forEach(g => {
 				const entry = accountMap.get(String(g.accountid));
-				if (entry) entry.groups.push(g.group);
+				if (entry) {
+					entry.groups.push(g.group);
+				}
 			});
 
 			let members = guild.members.cache.map(m => {
@@ -77,18 +85,20 @@ module.exports = function startServer(client) {
 			});
 
 			if (q) {
-				const qLower = String(q).toLowerCase();
+				const qLower = q.toString().toLowerCase();
 				members = members.filter(m =>
 					m.username.toLowerCase().includes(qLower) ||
 					m.discordUserId.includes(qLower)
 				);
 			}
+
 			if (role) {
-				const roleIds = String(role).split(',');
+				const roleIds = role.toString().split(',');
 				members = members.filter(m => roleIds.some(r => m.roleIds.includes(r)));
 			}
+
 			if (group) {
-				const groups = String(group).split(',');
+				const groups = group.toString().split(',');
 				members = members.filter(m => m._groups.some(g => groups.includes(g)));
 			}
 
@@ -99,8 +109,10 @@ module.exports = function startServer(client) {
 		}
 	});
 
-	// External groups
-	router.get('/external/groups', async (_req, res) => {
+	// ----------------------------
+	// Fetch external group records
+	// ----------------------------
+	app.get('/api/external/groups', async (_req, res) => {
 		try {
 			const [rows] = await fivemDb.query(
 				'SELECT accountid, `group`, assigned_on, assigned_by FROM external_groups'
@@ -117,10 +129,8 @@ module.exports = function startServer(client) {
 		}
 	});
 
-	// Mount under BOTH "/" and "/api"
-	app.use(['/', '/api'], router);
-
+	// Start API server
 	app.listen(PORT, '0.0.0.0', () => {
-		console.log(`API server listening on ${PORT}`);
+		console.log(`API server listening on port ${PORT}`);
 	});
 };

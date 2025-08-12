@@ -1,4 +1,4 @@
-// server.js (root)
+// server.js
 const express = require('express');
 const { fivemDb, appDb } = require('./config/database');
 
@@ -27,7 +27,7 @@ module.exports = function startServer(client) {
 	// Health
 	app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-	// Feature flag
+	// Features for a guild
 	app.get('/api/guilds/:guildId/features', async (req, res) => {
 		try {
 			const { guildId } = req.params;
@@ -39,7 +39,7 @@ module.exports = function startServer(client) {
 		}
 	});
 
-	// Guilds list
+	// List guilds
 	app.get('/api/guilds', async (_req, res) => {
 		try {
 			const guilds = await Promise.all(
@@ -83,7 +83,7 @@ module.exports = function startServer(client) {
 		}
 	});
 
-	// Members with optional groups (feature-gated)
+	// Members with optional groups. Correctly joins groups by accountid.
 	app.get('/api/guilds/:guildId/members', async (req, res) => {
 		try {
 			const { guildId } = req.params;
@@ -94,24 +94,32 @@ module.exports = function startServer(client) {
 			const guild = await client.guilds.fetch(guildId);
 			await guild.members.fetch();
 
-			// accounts + groups live in FiveM DB
+			// Pull accounts from FiveM DB. Map discord id -> account info object.
 			const [accounts] = await fivemDb.query(
 				"SELECT accountid, REPLACE(discord, 'discord:', '') AS discord FROM accounts WHERE discord IS NOT NULL"
 			);
 
-			const accountMap = new Map();
-			accounts.forEach(r => accountMap.set(r.discord, { accountid: String(r.accountid), groups: [] }));
+			const discordToInfo = new Map();   // key: discord snowflake -> { accountid, groups: [] }
+			const accountIdToInfo = new Map(); // key: accountid string   -> same object
 
-			if (customGroupsEnabled) {
-				const [extGroups] = await fivemDb.query('SELECT accountid, `group` FROM accounts_groups');
-				extGroups.forEach(g => {
-					const entry = accountMap.get(String(g.accountid));
-					if (entry) entry.groups.push(g.group);
-				});
+			for (const r of accounts) {
+				const info = { accountid: String(r.accountid), groups: [] };
+				discordToInfo.set(String(r.discord), info);
+				accountIdToInfo.set(String(r.accountid), info);
 			}
 
+			// Attach groups to the same objects using accountid. Only if feature is enabled.
+			if (customGroupsEnabled) {
+				const [extGroups] = await fivemDb.query('SELECT accountid, `group` FROM accounts_groups');
+				for (const g of extGroups) {
+					const info = accountIdToInfo.get(String(g.accountid));
+					if (info) info.groups.push(g.group);
+				}
+			}
+
+			// Emit members. Groups are included only when feature is enabled.
 			let members = guild.members.cache.map(m => {
-				const info = accountMap.get(m.id) || { accountid: null, groups: [] };
+				const info = discordToInfo.get(m.id) || { accountid: null, groups: [] };
 				const base = {
 					guildId: guild.id,
 					discordUserId: m.id,
@@ -122,7 +130,7 @@ module.exports = function startServer(client) {
 				return customGroupsEnabled ? { ...base, groups: info.groups } : base;
 			});
 
-			// q filter
+			// Optional filters
 			if (q) {
 				const qLower = String(q).toLowerCase();
 				members = members.filter(m =>
@@ -131,12 +139,10 @@ module.exports = function startServer(client) {
 					(String(m.accountid || '')).includes(qLower)
 				);
 			}
-			// role filter
 			if (role) {
 				const roleIds = String(role).split(',');
 				members = members.filter(m => roleIds.some(r => m.roleIds.includes(r)));
 			}
-			// group filter only if enabled
 			if (customGroupsEnabled && group) {
 				const groups = String(group).split(',');
 				members = members.filter(m => Array.isArray(m.groups) && m.groups.some(g => groups.includes(g)));

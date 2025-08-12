@@ -5,30 +5,38 @@ module.exports = function startServer(client) {
 	const app = express();
 	const PORT = process.env.PORT || 3001;
 
-	// CORS
+	// CORS (safe since you proxy via same origin now, but harmless)
 	app.use((req, res, next) => {
 		res.setHeader('Access-Control-Allow-Origin', '*');
 		next();
 	});
 
-	// -------------------
-	// NEW: List all guilds
-	// -------------------
-	app.get('/api/guilds', (_req, res) => {
+	// List guilds with fields the UI expects
+	app.get('/api/guilds', async (_req, res) => {
 		try {
-			const list = client.guilds.cache.map(g => ({
-				id: g.id,
-				name: g.name
-			}));
-			res.json(list);
+			const guilds = await Promise.all(
+				client.guilds.cache.map(async (g) => {
+					const guild = await client.guilds.fetch(g.id);
+					await guild.roles.fetch();
+					const iconUrl = guild.iconURL ? guild.iconURL({ size: 128, extension: 'png' }) : null;
+					return {
+						id: guild.id,
+						name: guild.name,
+						memberCount: guild.memberCount ?? 0,
+						roleCount: guild.roles.cache.size ?? 0,
+						iconUrl,
+						premium: false,
+						createdAt: guild.createdAt ? guild.createdAt.toISOString() : null,
+					};
+				})
+			);
+			res.json(guilds);
 		} catch (err) {
 			res.status(500).json({ error: err.message });
 		}
 	});
 
-	// -----------------------
-	// Fetch roles for a guild
-	// -----------------------
+	// Roles for a guild
 	app.get('/api/guilds/:guildId/roles', async (req, res) => {
 		try {
 			const guild = await client.guilds.fetch(req.params.guildId);
@@ -45,31 +53,23 @@ module.exports = function startServer(client) {
 		}
 	});
 
-	// -------------------------
-	// Fetch members for a guild
-	// -------------------------
+	// Members for a guild with optional filters
 	app.get('/api/guilds/:guildId/members', async (req, res) => {
 		try {
 			const { q, role, group } = req.query;
 			const guild = await client.guilds.fetch(req.params.guildId);
 			await guild.members.fetch();
 
-			// Map Discord IDs to account IDs
 			const [accounts] = await fivemDb.query(
 				"SELECT accountid, REPLACE(discord, 'discord:', '') AS discord FROM accounts WHERE discord IS NOT NULL"
 			);
 			const accountMap = new Map();
 			accounts.forEach(r => accountMap.set(r.discord, { accountid: String(r.accountid), groups: [] }));
 
-			// Load external groups
-			const [extGroups] = await fivemDb.query(
-				'SELECT accountid, `group` FROM accounts_groups'
-			);
+			const [extGroups] = await fivemDb.query('SELECT accountid, `group` FROM accounts_groups');
 			extGroups.forEach(g => {
 				const entry = accountMap.get(String(g.accountid));
-				if (entry) {
-					entry.groups.push(g.group);
-				}
+				if (entry) entry.groups.push(g.group);
 			});
 
 			let members = guild.members.cache.map(m => {
@@ -85,20 +85,17 @@ module.exports = function startServer(client) {
 			});
 
 			if (q) {
-				const qLower = q.toString().toLowerCase();
+				const qLower = String(q).toLowerCase();
 				members = members.filter(m =>
-					m.username.toLowerCase().includes(qLower) ||
-					m.discordUserId.includes(qLower)
+					m.username.toLowerCase().includes(qLower) || m.discordUserId.includes(qLower)
 				);
 			}
-
 			if (role) {
-				const roleIds = role.toString().split(',');
+				const roleIds = String(role).split(',');
 				members = members.filter(m => roleIds.some(r => m.roleIds.includes(r)));
 			}
-
 			if (group) {
-				const groups = group.toString().split(',');
+				const groups = String(group).split(',');
 				members = members.filter(m => m._groups.some(g => groups.includes(g)));
 			}
 
@@ -109,9 +106,7 @@ module.exports = function startServer(client) {
 		}
 	});
 
-	// ----------------------------
-	// Fetch external group records
-	// ----------------------------
+	// External groups
 	app.get('/api/external/groups', async (_req, res) => {
 		try {
 			const [rows] = await fivemDb.query(
@@ -129,7 +124,6 @@ module.exports = function startServer(client) {
 		}
 	});
 
-	// Start API server
 	app.listen(PORT, '0.0.0.0', () => {
 		console.log(`API server listening on port ${PORT}`);
 	});

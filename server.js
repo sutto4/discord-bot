@@ -12,50 +12,45 @@ async function isFeatureEnabled(guildId, featureName) {
   return String(rows[0].enabled) === '1';
 }
 
-// Permission gate: caller must be in the guild and have Manage Roles or Administrator.
-// Also enforces role hierarchy: caller must outrank the target role and target member.
+// Caller must be guild member with Manage Roles or Administrator.
+// Enforce role hierarchy against caller and bot.
 function requireRoleManager(client) {
   return async (req, res, next) => {
     try {
       const { guildId, userId, roleId } = req.params;
       const callerId = String(req.header('x-user-id') || '');
-
       if (!callerId) return res.status(401).json({ error: 'missing_caller_id' });
 
       const guild = await client.guilds.fetch(guildId).catch(() => null);
       if (!guild) return res.status(404).json({ error: 'guild_not_found' });
 
-      // fetch needed objects
       await guild.roles.fetch();
       const role = roleId ? guild.roles.cache.get(roleId) : null;
+
       const caller = await guild.members.fetch(callerId).catch(() => null);
       if (!caller) return res.status(403).json({ error: 'caller_not_in_guild' });
 
       const hasManageRoles =
         caller.permissions.has(PermissionsBitField.Flags.ManageRoles) ||
         caller.permissions.has(PermissionsBitField.Flags.Administrator);
-
       if (!hasManageRoles) return res.status(403).json({ error: 'missing_manage_roles' });
 
-      // If a specific role is involved, validate it and hierarchy vs caller and bot
+      // Validate role vs bot and caller
       if (role) {
         if (role.managed || role.id === guild.id) {
-          return res.status(400).json({ error: 'uneditable_role' }); // bot-managed or @everyone
+          return res.status(400).json({ error: 'uneditable_role' }); // bot managed or @everyone
         }
-
         const bot = await guild.members.fetchMe();
         if (role.position >= bot.roles.highest.position) {
           return res.status(400).json({ error: 'role_above_bot' });
         }
-
-        // caller must outrank the role unless they are Administrator
         const callerIsAdmin = caller.permissions.has(PermissionsBitField.Flags.Administrator);
         if (!callerIsAdmin && role.position >= caller.roles.highest.position) {
           return res.status(403).json({ error: 'role_above_caller' });
         }
       }
 
-      // If a target member is involved, enforce hierarchy between caller and target
+      // Validate target member vs caller hierarchy
       if (userId) {
         const target = await guild.members.fetch(userId).catch(() => null);
         if (!target) return res.status(404).json({ error: 'member_not_found' });
@@ -77,20 +72,21 @@ module.exports = function startServer(client) {
   const app = express();
   const PORT = process.env.PORT || 3001;
 
-  // Discord REST for pagination
   const rest = client?.rest ?? new REST({ version: '10' }).setToken(process.env.TOKEN);
 
-  // CORS
-  app.use((_, res, next) => {
+  // CORS + preflight
+  app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-user-id');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
   });
 
   // Health
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-  // Features — expose premium toggle (we use custom_groups as premium switch)
+  // Features
   app.get('/api/guilds/:guildId/features', async (req, res) => {
     try {
       const { guildId } = req.params;
@@ -147,7 +143,7 @@ module.exports = function startServer(client) {
     }
   });
 
-  // Legacy full-members (kept)
+  // Full members (legacy)
   app.get('/api/guilds/:guildId/members', async (req, res) => {
     try {
       const { guildId } = req.params;
@@ -214,7 +210,7 @@ module.exports = function startServer(client) {
     }
   });
 
-  // Paged members with premium gating + server-side filters
+  // Paged members
   app.get('/api/guilds/:guildId/members-paged', async (req, res) => {
     try {
       const { guildId } = req.params;
@@ -298,58 +294,52 @@ module.exports = function startServer(client) {
     }
   });
 
-  // Role management — uses requireRoleManager to validate caller perms and hierarchy
-  app.post('/api/guilds/:guildId/members/:userId/roles/:roleId',
-    requireRoleManager(client),
-    async (req, res) => {
-      try {
-        const { guildId, userId, roleId } = req.params;
-        const guild = await client.guilds.fetch(guildId);
-        await guild.roles.fetch();
+  // Role management
+  app.post('/api/guilds/:guildId/members/:userId/roles/:roleId', requireRoleManager(client), async (req, res) => {
+    try {
+      const { guildId, userId, roleId } = req.params;
+      const guild = await client.guilds.fetch(guildId);
+      await guild.roles.fetch();
 
-        const role = guild.roles.cache.get(roleId);
-        if (!role) return res.status(404).json({ error: 'role_not_found' });
+      const role = guild.roles.cache.get(roleId);
+      if (!role) return res.status(404).json({ error: 'role_not_found' });
 
-        const member = await guild.members.fetch(userId);
-        const me = await guild.members.fetchMe();
+      const member = await guild.members.fetch(userId);
+      const me = await guild.members.fetchMe();
 
-        if (role.managed || role.id === guild.id) return res.status(400).json({ error: 'uneditable_role' });
-        if (role.position >= me.roles.highest.position) return res.status(400).json({ error: 'role_above_bot' });
+      if (role.managed || role.id === guild.id) return res.status(400).json({ error: 'uneditable_role' });
+      if (role.position >= me.roles.highest.position) return res.status(400).json({ error: 'role_above_bot' });
 
-        await member.roles.add(role);
-        res.json({ ok: true });
-      } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: err.code || err.message });
-      }
+      await member.roles.add(role);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: err.code || err.message });
     }
-  );
+  });
 
-  app.delete('/api/guilds/:guildId/members/:userId/roles/:roleId',
-    requireRoleManager(client),
-    async (req, res) => {
-      try {
-        const { guildId, userId, roleId } = req.params;
-        const guild = await client.guilds.fetch(guildId);
-        await guild.roles.fetch();
+  app.delete('/api/guilds/:guildId/members/:userId/roles/:roleId', requireRoleManager(client), async (req, res) => {
+    try {
+      const { guildId, userId, roleId } = req.params;
+      const guild = await client.guilds.fetch(guildId);
+      await guild.roles.fetch();
 
-        const role = guild.roles.cache.get(roleId);
-        if (!role) return res.status(404).json({ error: 'role_not_found' });
+      const role = guild.roles.cache.get(roleId);
+      if (!role) return res.status(404).json({ error: 'role_not_found' });
 
-        const member = await guild.members.fetch(userId);
-        const me = await guild.members.fetchMe();
+      const member = await guild.members.fetch(userId);
+      const me = await guild.members.fetchMe();
 
-        if (role.managed || role.id === guild.id) return res.status(400).json({ error: 'uneditable_role' });
-        if (role.position >= me.roles.highest.position) return res.status(400).json({ error: 'role_above_bot' });
+      if (role.managed || role.id === guild.id) return res.status(400).json({ error: 'uneditable_role' });
+      if (role.position >= me.roles.highest.position) return res.status(400).json({ error: 'role_above_bot' });
 
-        await member.roles.remove(role);
-        res.json({ ok: true });
-      } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: err.code || err.message });
-      }
+      await member.roles.remove(role);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: err.code || err.message });
     }
-  );
+  });
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`API server listening on ${PORT}`);

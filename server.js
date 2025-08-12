@@ -12,8 +12,7 @@ async function isFeatureEnabled(guildId, featureName) {
   return String(rows[0].enabled) === '1';
 }
 
-// Caller must be guild member with Manage Roles or Administrator.
-// Enforce role hierarchy against caller and bot.
+// Permission gate
 function requireRoleManager(client) {
   return async (req, res, next) => {
     try {
@@ -35,22 +34,17 @@ function requireRoleManager(client) {
         caller.permissions.has(PermissionsBitField.Flags.Administrator);
       if (!hasManageRoles) return res.status(403).json({ error: 'missing_manage_roles' });
 
-      // Validate role vs bot and caller
       if (role) {
-        if (role.managed || role.id === guild.id) {
-          return res.status(400).json({ error: 'uneditable_role' }); // bot managed or @everyone
-        }
+        if (role.managed || role.id === guild.id) return res.status(400).json({ error: 'uneditable_role' });
         const bot = await guild.members.fetchMe();
-        if (role.position >= bot.roles.highest.position) {
-          return res.status(400).json({ error: 'role_above_bot' });
-        }
+        if (role.position >= bot.roles.highest.position) return res.status(400).json({ error: 'role_above_bot' });
+
         const callerIsAdmin = caller.permissions.has(PermissionsBitField.Flags.Administrator);
         if (!callerIsAdmin && role.position >= caller.roles.highest.position) {
           return res.status(403).json({ error: 'role_above_caller' });
         }
       }
 
-      // Validate target member vs caller hierarchy
       if (userId) {
         const target = await guild.members.fetch(userId).catch(() => null);
         if (!target) return res.status(404).json({ error: 'member_not_found' });
@@ -125,16 +119,20 @@ module.exports = function startServer(client) {
     }
   });
 
-  // Roles
+  // Roles — now includes manageability flags
   app.get('/api/guilds/:guildId/roles', async (req, res) => {
     try {
       const guild = await client.guilds.fetch(req.params.guildId);
       await guild.roles.fetch();
+      const me = await guild.members.fetchMe();
+
       const roles = guild.roles.cache.map(role => ({
         guildId: guild.id,
         roleId: role.id,
         name: role.name,
         color: role.hexColor || null,
+        managed: role.managed,
+        editableByBot: (!role.managed && role.id !== guild.id && role.position < me.roles.highest.position),
       }));
       res.json(roles);
     } catch (err) {

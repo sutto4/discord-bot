@@ -1,4 +1,5 @@
 const express = require('express');
+const bodyParser = require('body-parser'); // <-- add this
 const { fivemDb } = require('./config/database');
 
 module.exports = function startServer(client) {
@@ -10,6 +11,8 @@ module.exports = function startServer(client) {
 		res.setHeader('Access-Control-Allow-Origin', '*');
 		next();
 	});
+
+	app.use(bodyParser.json()); // <-- add this
 
 	// List guilds with fields the UI expects
 	app.get('/api/guilds', async (_req, res) => {
@@ -109,22 +112,63 @@ module.exports = function startServer(client) {
 	// External groups
 	app.get('/api/external/groups', async (_req, res) => {
 		try {
-			const [rows] = await fivemDb.query(
-				'SELECT accountid, `group`, assigned_on, assigned_by FROM accounts_groups'
-			);
+			const [rows] = await fivemDb.query('SELECT accountid, `group` FROM accounts_groups');
 			const groups = rows.map(r => ({
 				accountid: String(r.accountid),
-				group: r.group,
-				assigned_on: r.assigned_on,
-				assigned_by: String(r.assigned_by),
+				group: r.group
 			}));
 			res.json(groups);
 		} catch (err) {
-			res.status(500).json({ error: err.message });
+			console.error('[external/groups] DB error:', err?.message || err);
+			res.json([]);
 		}
 	});
 
-	app.listen(PORT, '0.0.0.0', () => {
-		console.log(`API server listening on port ${PORT}`);
+	// PATCH /api/guilds/:guildId/roles/:roleId
+	// Edit a Discord role
+	app.patch('/api/guilds/:guildId/roles/:roleId', async (req, res) => {
+		try {
+			const { guildId, roleId } = req.params;
+			const { name, color, hoist, mentionable } = req.body || {};
+
+			const guild = await client.guilds.fetch(guildId);
+			await guild.roles.fetch();
+			const role = guild.roles.cache.get(roleId);
+			if (!role) return res.status(404).json({ error: 'Role not found' });
+
+			const me = guild.members.me || await guild.members.fetchMe();
+			const myRole = me.roles.highest;
+			if (!me.permissions.has('ManageRoles')) {
+				return res.status(403).json({ error: 'Bot lacks Manage Roles' });
+			}
+			if (myRole.comparePositionTo(role) <= 0) {
+				return res.status(403).json({ error: 'Cannot edit role above or equal to bot' });
+			}
+
+			const payload = {};
+			if (typeof name === 'string' && name.trim()) payload.name = name.trim();
+			if (typeof hoist === 'boolean') payload.hoist = hoist;
+			if (typeof mentionable === 'boolean') payload.mentionable = mentionable;
+			if (typeof color === 'string' && /^#?[0-9a-fA-F]{6}$/.test(color)) {
+				payload.color = parseInt(color.replace('#', ''), 16);
+			}
+
+			if (Object.keys(payload).length === 0) {
+				return res.status(400).json({ error: 'No valid fields to update' });
+			}
+
+			const updated = await role.edit(payload);
+			res.json({
+				guildId,
+				roleId: updated.id,
+				name: updated.name,
+				color: updated.hexColor,
+				hoist: updated.hoist,
+				mentionable: updated.mentionable,
+			});
+		} catch (err) {
+			console.error('[PATCH role] error:', err);
+			res.status(500).json({ error: err.message });
+		}
 	});
 };

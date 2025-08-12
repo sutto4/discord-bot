@@ -1,0 +1,4 @@
+[submodule "discord-bot"]
+	path = discord-bot
+	url = https://github.com/sutto4/discord-bot
+	branch = main

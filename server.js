@@ -110,7 +110,7 @@ module.exports = function startServer(client) {
 	app.get('/api/external/groups', async (_req, res) => {
 		try {
 			const [rows] = await fivemDb.query(
-				'SELECT accountid, `group`, assigned_on, assigned_by FROM external_groups'
+				'SELECT accountid, `group`, assigned_on, assigned_by FROM accounts_groups'
 			);
 			const groups = rows.map(r => ({
 				accountid: String(r.accountid),

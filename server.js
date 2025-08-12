@@ -16,9 +16,10 @@ module.exports = function startServer(client) {
   const app = express();
   const PORT = process.env.PORT || 3001;
 
-  // REST for Discord API (cursor pagination)
+  // REST client for Discord pagination
   const rest = client?.rest ?? new REST({ version: '10' }).setToken(process.env.TOKEN);
 
+  // CORS
   app.use((_, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     next();
@@ -27,19 +28,27 @@ module.exports = function startServer(client) {
   // Health
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-  // Feature flag
+  // Features endpoint — expose both flags
   app.get('/api/guilds/:guildId/features', async (req, res) => {
     try {
       const { guildId } = req.params;
       const customGroups = await isFeatureEnabled(guildId, 'custom_groups');
-      res.json({ guildId, features: { custom_groups: customGroups } });
+      // premium_members == custom_groups for now
+      const premiumMembers = customGroups;
+      res.json({
+        guildId,
+        features: {
+          custom_groups: customGroups,
+          premium_members: premiumMembers
+        }
+      });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: err.message });
     }
   });
 
-  // Guilds (unchanged)
+  // Guilds
   app.get('/api/guilds', async (_req, res) => {
     try {
       const guilds = await Promise.all(
@@ -65,7 +74,7 @@ module.exports = function startServer(client) {
     }
   });
 
-  // Roles (unchanged)
+  // Roles
   app.get('/api/guilds/:guildId/roles', async (req, res) => {
     try {
       const guild = await client.guilds.fetch(req.params.guildId);
@@ -83,7 +92,7 @@ module.exports = function startServer(client) {
     }
   });
 
-  // Existing full members endpoint (kept for backward compat)
+  // Legacy full-members (kept) — unchanged logic, but uses feature flag for groups
   app.get('/api/guilds/:guildId/members', async (req, res) => {
     try {
       const { guildId } = req.params;
@@ -92,7 +101,7 @@ module.exports = function startServer(client) {
       const customGroupsEnabled = await isFeatureEnabled(guildId, 'custom_groups');
 
       const guild = await client.guilds.fetch(guildId);
-      await guild.members.fetch(); // not used by UI anymore for big lists
+      await guild.members.fetch();
 
       const [accounts] = await fivemDb.query(
         "SELECT accountid, REPLACE(discord, 'discord:', '') AS discord FROM accounts WHERE discord IS NOT NULL"
@@ -123,7 +132,7 @@ module.exports = function startServer(client) {
           roleIds: Array.from(m.roles.cache.keys()),
           accountid: info.accountid
         };
-        return (customGroupsEnabled ? { ...base, groups: info.groups } : base);
+        return customGroupsEnabled ? { ...base, groups: info.groups } : base;
       });
 
       if (q) {
@@ -150,54 +159,58 @@ module.exports = function startServer(client) {
     }
   });
 
-  // New: paged members that does NOT load entire guild
+  // Paged members — premium gating
   app.get('/api/guilds/:guildId/members-paged', async (req, res) => {
     try {
       const { guildId } = req.params;
-      const limit = Math.max(1, Math.min(Number(req.query.limit) || 100, 1000));
+      const rawLimit = Math.max(1, Math.min(Number(req.query.limit) || 100, 1000));
       const after = (req.query.after && String(req.query.after)) || '0';
+      const q = req.query.q ? String(req.query.q) : '';
+      const role = req.query.role ? String(req.query.role) : '';
+      const group = req.query.group ? String(req.query.group) : '';
 
-      const customGroupsEnabled = await isFeatureEnabled(guildId, 'custom_groups');
+      const premium = await isFeatureEnabled(guildId, 'custom_groups');
 
-      // Get page from Discord REST
-      const page = await rest.get(Routes.guildMembers(guildId), {
-        query: { limit, after }
-      });
+      // Limits
+      const limit = premium ? Math.min(rawLimit, 500) : Math.min(rawLimit, 100);
 
-      // Pull Discord IDs in this page
+      // Page from Discord REST
+      const page = await rest.get(Routes.guildMembers(guildId), { query: { limit, after } });
+
+      // IDs in this page
       const ids = page.map(m => String(m.user?.id)).filter(Boolean);
-      let accountByDiscord = new Map();
-      let groupsByAccount = new Map();
 
+      // Map discord -> accountid
+      let accountByDiscord = new Map();
       if (ids.length) {
-        // accounts for only this page
-        const placeholders = ids.map(() => '?').join(',');
+        const ph = ids.map(() => '?').join(',');
         const [accRows] = await fivemDb.query(
           `SELECT accountid, REPLACE(discord, 'discord:', '') AS discord
            FROM accounts
-           WHERE discord IS NOT NULL AND REPLACE(discord, 'discord:', '') IN (${placeholders})`,
+           WHERE discord IS NOT NULL AND REPLACE(discord, 'discord:', '') IN (${ph})`,
           ids
         );
         accountByDiscord = new Map(accRows.map(r => [String(r.discord), String(r.accountid)]));
+      }
 
-        if (customGroupsEnabled && accRows.length) {
-          const accIds = accRows.map(r => String(r.accountid));
-          const accPH = accIds.map(() => '?').join(',');
-          const [grpRows] = await fivemDb.query(
-            `SELECT accountid, \`group\` FROM accounts_groups WHERE accountid IN (${accPH})`,
-            accIds
-          );
-          groupsByAccount = new Map();
-          for (const r of grpRows) {
-            const k = String(r.accountid);
-            if (!groupsByAccount.has(k)) groupsByAccount.set(k, []);
-            groupsByAccount.get(k).push(r.group);
-          }
+      // Groups per accountid only if premium
+      let groupsByAccount = new Map();
+      if (premium && accountByDiscord.size) {
+        const accIds = Array.from(new Set(Array.from(accountByDiscord.values())));
+        const accPH = accIds.map(() => '?').join(',');
+        const [grpRows] = await fivemDb.query(
+          `SELECT accountid, \`group\` FROM accounts_groups WHERE accountid IN (${accPH})`,
+          accIds
+        );
+        for (const r of grpRows) {
+          const k = String(r.accountid);
+          if (!groupsByAccount.has(k)) groupsByAccount.set(k, []);
+          groupsByAccount.get(k).push(r.group);
         }
       }
 
-      // Build response records from this page
-      const members = page.map(m => {
+      // Build records
+      let members = page.map(m => {
         const discordId = String(m.user?.id);
         const accountid = accountByDiscord.get(discordId) || null;
         const base = {
@@ -207,16 +220,28 @@ module.exports = function startServer(client) {
           roleIds: Array.isArray(m.roles) ? m.roles.map(String) : [],
           accountid
         };
-        if (customGroupsEnabled) {
-          base.groups = accountid ? (groupsByAccount.get(accountid) || []) : [];
-        }
-        return base;
+        return premium ? { ...base, groups: accountid ? (groupsByAccount.get(accountid) || []) : [] } : base;
       });
 
-      // Cursor for next page
-      const nextAfter = page.length ? String(page[page.length - 1].user.id) : null;
+      // Server-side filters
+      if (q) {
+        const qLower = q.toLowerCase();
+        members = members.filter(m =>
+          (m.username || '').toLowerCase().includes(qLower) ||
+          String(m.discordUserId || '').includes(qLower) ||
+          String(m.accountid || '').includes(qLower)
+        );
+      }
+      if (role) {
+        const roleIds = role.split(',');
+        members = members.filter(m => roleIds.some(r => m.roleIds.includes(r)));
+      }
+      if (premium && group) {
+        const groups = group.split(',');
+        members = members.filter(m => Array.isArray(m.groups) && m.groups.some(g => groups.includes(g)));
+      }
 
-      // total (approx from gateway)
+      const nextAfter = page.length ? String(page[page.length - 1].user.id) : null;
       const g = await client.guilds.fetch(guildId);
       const total = g?.memberCount ?? null;
 

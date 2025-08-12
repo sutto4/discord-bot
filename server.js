@@ -12,7 +12,6 @@ async function isFeatureEnabled(guildId, featureName) {
   return String(rows[0].enabled) === '1';
 }
 
-// Permission gate
 function requireRoleManager(client) {
   return async (req, res, next) => {
     try {
@@ -65,10 +64,9 @@ function requireRoleManager(client) {
 module.exports = function startServer(client) {
   const app = express();
   const PORT = process.env.PORT || 3001;
-
   const rest = client?.rest ?? new REST({ version: '10' }).setToken(process.env.TOKEN);
 
-  // CORS + preflight
+  // CORS
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-user-id');
@@ -77,23 +75,19 @@ module.exports = function startServer(client) {
     next();
   });
 
-  // Health
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-  // Features
   app.get('/api/guilds/:guildId/features', async (req, res) => {
     try {
       const { guildId } = req.params;
       const customGroups = await isFeatureEnabled(guildId, 'custom_groups');
-      const premiumMembers = customGroups;
-      res.json({ guildId, features: { custom_groups: customGroups, premium_members: premiumMembers } });
+      res.json({ guildId, features: { custom_groups: customGroups, premium_members: customGroups } });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: err.message });
     }
   });
 
-  // Guilds
   app.get('/api/guilds', async (_req, res) => {
     try {
       const guilds = await Promise.all(
@@ -119,20 +113,18 @@ module.exports = function startServer(client) {
     }
   });
 
-  // Roles — include manageability hints
   app.get('/api/guilds/:guildId/roles', async (req, res) => {
     try {
       const guild = await client.guilds.fetch(req.params.guildId);
       await guild.roles.fetch();
       const me = await guild.members.fetchMe();
-
-      const roles = guild.roles.cache.map(role => ({
+      const roles = guild.roles.cache.map((role) => ({
         guildId: guild.id,
         roleId: role.id,
         name: role.name,
         color: role.hexColor || null,
         managed: role.managed,
-        editableByBot: (!role.managed && role.id !== guild.id && role.position < me.roles.highest.position),
+        editableByBot: !role.managed && role.id !== guild.id && role.position < me.roles.highest.position,
       }));
       res.json(roles);
     } catch (err) {
@@ -141,14 +133,11 @@ module.exports = function startServer(client) {
     }
   });
 
-  // Legacy full members
+  // Legacy members (cache)
   app.get('/api/guilds/:guildId/members', async (req, res) => {
     try {
       const { guildId } = req.params;
-      const { q, role, group } = req.query;
-
       const customGroupsEnabled = await isFeatureEnabled(guildId, 'custom_groups');
-
       const guild = await client.guilds.fetch(guildId);
       await guild.members.fetch();
 
@@ -172,34 +161,17 @@ module.exports = function startServer(client) {
         }
       }
 
-      let members = guild.members.cache.map(m => {
+      const members = (await guild.members.fetch()).map((m) => {
         const info = discordToInfo.get(m.id) || { accountid: null, groups: [] };
         const base = {
           guildId: guild.id,
           discordUserId: m.id,
           username: m.user.username,
           roleIds: Array.from(m.roles.cache.keys()),
-          accountid: info.accountid
+          accountid: info.accountid,
         };
         return customGroupsEnabled ? { ...base, groups: info.groups } : base;
       });
-
-      if (q) {
-        const qLower = String(q).toLowerCase();
-        members = members.filter(m =>
-          (m.username || '').toLowerCase().includes(qLower) ||
-          String(m.discordUserId || '').includes(qLower) ||
-          String(m.accountid || '').includes(qLower)
-        );
-      }
-      if (role) {
-        const roleIds = String(role).split(',');
-        members = members.filter(m => roleIds.some(r => m.roleIds.includes(r)));
-      }
-      if (customGroupsEnabled && group) {
-        const groups = String(group).split(',');
-        members = members.filter(m => Array.isArray(m.groups) && m.groups.some(g => groups.includes(g)));
-      }
 
       res.json(members);
     } catch (err) {
@@ -208,10 +180,10 @@ module.exports = function startServer(client) {
     }
   });
 
-  // Helper: fetch all members via REST pagination
+  // REST helpers
   async function fetchAllMembersREST(guildId, perPage = 1000, hardCap = 20000) {
     let after = '0';
-    let all = [];
+    const all = [];
     for (;;) {
       const batch = await rest.get(Routes.guildMembers(guildId), { query: { limit: Math.min(perPage, 1000), after } });
       if (!Array.isArray(batch) || batch.length === 0) break;
@@ -223,7 +195,53 @@ module.exports = function startServer(client) {
     return all;
   }
 
-  // Paged members (now supports all=true for small guilds)
+  async function fetchAllMembersGateway(client, guildId) {
+    const guild = await client.guilds.fetch(guildId);
+    const col = await guild.members.fetch(); // requires Server Members intent
+    return Array.from(col.values()).map((m) => ({
+      user: { id: m.user.id, username: m.user.username, global_name: m.user.globalName },
+      roles: Array.from(m.roles.cache.keys()),
+    }));
+  }
+
+  // Smart fetch with better fallback + forceable source
+  async function fetchAllMembersSmart(client, guildId, expectedTotal, forceSource = 'auto') {
+    const dbg = { forceSource };
+    try {
+      if (forceSource === 'gateway') {
+        const gAll = await fetchAllMembersGateway(client, guildId);
+        return { members: gAll, source: 'gateway', ...dbg };
+      }
+      if (forceSource === 'rest') {
+        const rAll = await fetchAllMembersREST(guildId);
+        return { members: rAll, source: 'rest', ...dbg };
+      }
+
+      // auto: try REST first
+      const rAll = await fetchAllMembersREST(guildId);
+      const rCount = rAll.length;
+      dbg.restCount = rCount;
+
+      const needGateway =
+        (typeof expectedTotal === 'number' && expectedTotal > 0 && rCount < expectedTotal) ||
+        rCount <= 1; // if REST only returns the bot or 1 user, try gateway
+
+      if (!needGateway) return { members: rAll, source: 'rest', ...dbg };
+
+      try {
+        const gAll = await fetchAllMembersGateway(client, guildId);
+        return { members: gAll, source: 'gateway', restCount: rCount, gatewayCount: gAll.length, ...dbg };
+      } catch (e) {
+        dbg.gatewayError = String(e?.message || e);
+        return { members: rAll, source: 'rest', ...dbg };
+      }
+    } catch (e) {
+      dbg.outerError = String(e?.message || e);
+      return { members: [], source: 'error', ...dbg };
+    }
+  }
+
+  // Paged members, supports all=true and source override
   app.get('/api/guilds/:guildId/members-paged', async (req, res) => {
     try {
       const { guildId } = req.params;
@@ -233,27 +251,30 @@ module.exports = function startServer(client) {
       const role = req.query.role ? String(req.query.role) : '';
       const group = req.query.group ? String(req.query.group) : '';
       const wantAll = String(req.query.all || '').toLowerCase() === 'true';
+      const debug = String(req.query.debug || '').toLowerCase() === '1';
+      const sourceOverride = (String(req.query.source || 'auto').toLowerCase());
 
       const premium = await isFeatureEnabled(guildId, 'custom_groups');
-
-      // total members reported by Discord
       const g = await client.guilds.fetch(guildId);
       const total = g?.memberCount ?? null;
 
       let rawMembers = [];
       let nextAfter = null;
+      let dbg = {};
 
-      // Small guild mode: eager fetch all in one go if all=true or total <= 1000
       if (wantAll || (typeof total === 'number' && total <= 1000)) {
-        rawMembers = await fetchAllMembersREST(guildId, 1000);
+        const smart = await fetchAllMembersSmart(client, guildId, total ?? undefined, sourceOverride);
+        rawMembers = smart.members;
+        dbg = { source: smart.source, ...smart };
       } else {
         const page = await rest.get(Routes.guildMembers(guildId), { query: { limit: rawLimit, after } });
         rawMembers = page;
         nextAfter = page.length ? String(page[page.length - 1].user.id) : null;
+        dbg = { source: 'rest_page', pageSize: page.length };
       }
 
-      // Build lookups for account and groups
-      const ids = rawMembers.map(m => String(m.user?.id)).filter(Boolean);
+      const ids = rawMembers.map((m) => String(m.user?.id)).filter(Boolean);
+
       let accountByDiscord = new Map();
       if (ids.length) {
         const ph = ids.map(() => '?').join(',');
@@ -263,26 +284,27 @@ module.exports = function startServer(client) {
            WHERE discord IS NOT NULL AND REPLACE(discord, 'discord:', '') IN (${ph})`,
           ids
         );
-        accountByDiscord = new Map(accRows.map(r => [String(r.discord), String(r.accountid)]));
+        accountByDiscord = new Map(accRows.map((r) => [String(r.discord), String(r.accountid)]));
       }
 
       let groupsByAccount = new Map();
       if (premium && accountByDiscord.size) {
         const accIds = Array.from(new Set(Array.from(accountByDiscord.values())));
-        const accPH = accIds.map(() => '?').join(',');
-        const [grpRows] = await fivemDb.query(
-          `SELECT accountid, \`group\` FROM accounts_groups WHERE accountid IN (${accPH})`,
-          accIds
-        );
-        for (const r of grpRows) {
-          const k = String(r.accountid);
-          if (!groupsByAccount.has(k)) groupsByAccount.set(k, []);
-          groupsByAccount.get(k).push(r.group);
+        if (accIds.length) {
+          const accPH = accIds.map(() => '?').join(',');
+          const [grpRows] = await fivemDb.query(
+            `SELECT accountid, \`group\` FROM accounts_groups WHERE accountid IN (${accPH})`,
+            accIds
+          );
+          for (const r of grpRows) {
+            const k = String(r.accountid);
+            if (!groupsByAccount.has(k)) groupsByAccount.set(k, []);
+            groupsByAccount.get(k).push(r.group);
+          }
         }
       }
 
-      // Map to response shape
-      let members = rawMembers.map(m => {
+      let members = rawMembers.map((m) => {
         const discordId = String(m.user?.id);
         const accountid = accountByDiscord.get(discordId) || null;
         const base = {
@@ -290,63 +312,56 @@ module.exports = function startServer(client) {
           discordUserId: discordId,
           username: m.user?.username || m.user?.global_name || discordId,
           roleIds: Array.isArray(m.roles) ? m.roles.map(String) : [],
-          accountid
+          accountid,
         };
-        return premium ? { ...base, groups: accountid ? (groupsByAccount.get(accountid) || []) : [] } : base;
+        return premium ? { ...base, groups: accountid ? groupsByAccount.get(accountid) || [] : [] } : base;
       });
 
-      // Filters
       if (q) {
         const qLower = q.toLowerCase();
-        members = members.filter(m =>
-          (m.username || '').toLowerCase().includes(qLower) ||
-          String(m.discordUserId || '').includes(qLower) ||
-          String(m.accountid || '').includes(qLower)
+        members = members.filter(
+          (m) =>
+            (m.username || '').toLowerCase().includes(qLower) ||
+            String(m.discordUserId || '').includes(qLower) ||
+            String(m.accountid || '').includes(qLower)
         );
       }
       if (role) {
         const roleIds = role.split(',');
-        members = members.filter(m => roleIds.some(r => m.roleIds.includes(r)));
+        members = members.filter((m) => roleIds.some((r) => m.roleIds.includes(r)));
       }
       if (premium && group) {
         const groups = group.split(',');
-        members = members.filter(m => Array.isArray(m.groups) && m.groups.some(gp => groups.includes(gp)));
+        members = members.filter((m) => Array.isArray(m.groups) && m.groups.some((gp) => groups.includes(gp)));
       }
 
-      res.json({
+      const payload = {
         guildId,
-        page: {
-          limit: wantAll ? (typeof total === 'number' ? Math.min(total, 1000) : members.length) : rawLimit,
-          after,
-          nextAfter: wantAll ? null : nextAfter,
-          total
-        },
-        members
-      });
+        page: { limit: wantAll ? Math.min(members.length || rawLimit, 1000) : rawLimit, after, nextAfter, total },
+        members,
+      };
+      if (debug) payload._debug = { returned: members.length, expectedTotal: total, ...dbg };
+
+      res.json(payload);
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: err.message });
     }
   });
 
-  // Search members (REST search)
   app.get('/api/guilds/:guildId/members-search', async (req, res) => {
     try {
       const { guildId } = req.params;
       const q = String(req.query.q || '').trim();
       const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
       if (!q) return res.json([]);
-
-      const list = await rest.get(Routes.guildMembersSearch(guildId), {
-        query: { query: q, limit }
-      });
-
-      const members = list.map(m => ({
+      const list = await rest.get(Routes.guildMembersSearch(guildId), { query: { query: q, limit } });
+      const members = list.map((m) => ({
         guildId,
         discordUserId: String(m.user?.id),
         username: m.user?.username || m.user?.global_name || String(m.user?.id),
         roleIds: Array.isArray(m.roles) ? m.roles.map(String) : [],
-        accountid: null
+        accountid: null,
       }));
       res.json(members);
     } catch (err) {
@@ -355,22 +370,17 @@ module.exports = function startServer(client) {
     }
   });
 
-  // Role management
   app.post('/api/guilds/:guildId/members/:userId/roles/:roleId', requireRoleManager(client), async (req, res) => {
     try {
       const { guildId, userId, roleId } = req.params;
       const guild = await client.guilds.fetch(guildId);
       await guild.roles.fetch();
-
       const role = guild.roles.cache.get(roleId);
       if (!role) return res.status(404).json({ error: 'role_not_found' });
-
       const member = await guild.members.fetch(userId);
       const me = await guild.members.fetchMe();
-
       if (role.managed || role.id === guild.id) return res.status(400).json({ error: 'uneditable_role' });
       if (role.position >= me.roles.highest.position) return res.status(400).json({ error: 'role_above_bot' });
-
       await member.roles.add(role);
       res.json({ ok: true });
     } catch (err) {
@@ -384,16 +394,12 @@ module.exports = function startServer(client) {
       const { guildId, userId, roleId } = req.params;
       const guild = await client.guilds.fetch(guildId);
       await guild.roles.fetch();
-
       const role = guild.roles.cache.get(roleId);
       if (!role) return res.status(404).json({ error: 'role_not_found' });
-
       const member = await guild.members.fetch(userId);
       const me = await guild.members.fetchMe();
-
       if (role.managed || role.id === guild.id) return res.status(400).json({ error: 'uneditable_role' });
       if (role.position >= me.roles.highest.position) return res.status(400).json({ error: 'role_above_bot' });
-
       await member.roles.remove(role);
       res.json({ ok: true });
     } catch (err) {

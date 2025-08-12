@@ -1,8 +1,9 @@
+// server.js (root)
 const express = require('express');
-const { fivemDb } = require('./config/database');
+const { fivemDb, appDb } = require('./config/database');
 
 async function isFeatureEnabled(guildId, featureName) {
-	const [rows] = await fivemDb.query(
+	const [rows] = await appDb.query(
 		`SELECT enabled
 		   FROM guild_features
 		  WHERE guild_id = ? AND feature_name = ?
@@ -18,7 +19,7 @@ module.exports = function startServer(client) {
 	const PORT = process.env.PORT || 3001;
 
 	// CORS
-	app.use((req, res, next) => {
+	app.use((_, res, next) => {
 		res.setHeader('Access-Control-Allow-Origin', '*');
 		next();
 	});
@@ -26,7 +27,7 @@ module.exports = function startServer(client) {
 	// Health
 	app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-	// Features for a guild
+	// Feature flag
 	app.get('/api/guilds/:guildId/features', async (req, res) => {
 		try {
 			const { guildId } = req.params;
@@ -38,7 +39,7 @@ module.exports = function startServer(client) {
 		}
 	});
 
-	// List guilds
+	// Guilds list
 	app.get('/api/guilds', async (_req, res) => {
 		try {
 			const guilds = await Promise.all(
@@ -82,7 +83,7 @@ module.exports = function startServer(client) {
 		}
 	});
 
-	// Members with optional groups based on feature flag
+	// Members with optional groups (feature-gated)
 	app.get('/api/guilds/:guildId/members', async (req, res) => {
 		try {
 			const { guildId } = req.params;
@@ -93,16 +94,16 @@ module.exports = function startServer(client) {
 			const guild = await client.guilds.fetch(guildId);
 			await guild.members.fetch();
 
+			// accounts + groups live in FiveM DB
 			const [accounts] = await fivemDb.query(
 				"SELECT accountid, REPLACE(discord, 'discord:', '') AS discord FROM accounts WHERE discord IS NOT NULL"
 			);
+
 			const accountMap = new Map();
 			accounts.forEach(r => accountMap.set(r.discord, { accountid: String(r.accountid), groups: [] }));
 
-			let groupRows = [];
 			if (customGroupsEnabled) {
 				const [extGroups] = await fivemDb.query('SELECT accountid, `group` FROM accounts_groups');
-				groupRows = extGroups;
 				extGroups.forEach(g => {
 					const entry = accountMap.get(String(g.accountid));
 					if (entry) entry.groups.push(g.group);
@@ -118,14 +119,10 @@ module.exports = function startServer(client) {
 					roleIds: Array.from(m.roles.cache.keys()),
 					accountid: info.accountid
 				};
-				// only expose groups when feature is enabled
-				if (customGroupsEnabled) {
-					return { ...base, groups: info.groups };
-				}
-				return base;
+				return customGroupsEnabled ? { ...base, groups: info.groups } : base;
 			});
 
-			// text filter
+			// q filter
 			if (q) {
 				const qLower = String(q).toLowerCase();
 				members = members.filter(m =>
@@ -134,14 +131,12 @@ module.exports = function startServer(client) {
 					(String(m.accountid || '')).includes(qLower)
 				);
 			}
-
 			// role filter
 			if (role) {
 				const roleIds = String(role).split(',');
 				members = members.filter(m => roleIds.some(r => m.roleIds.includes(r)));
 			}
-
-			// group filter only if feature is enabled
+			// group filter only if enabled
 			if (customGroupsEnabled && group) {
 				const groups = String(group).split(',');
 				members = members.filter(m => Array.isArray(m.groups) && m.groups.some(g => groups.includes(g)));
@@ -174,6 +169,6 @@ module.exports = function startServer(client) {
 	});
 
 	app.listen(PORT, '0.0.0.0', () => {
-		console.log(`API server listening on port ${PORT}`);
+		console.log(`API server listening on ${PORT}`);
 	});
 };

@@ -65,7 +65,6 @@ function requireRoleManager(client) {
 module.exports = function startServer(client) {
   const app = express();
   const PORT = process.env.PORT || 3001;
-
   const rest = client?.rest ?? new REST({ version: '10' }).setToken(process.env.TOKEN);
 
   // CORS + preflight
@@ -119,7 +118,7 @@ module.exports = function startServer(client) {
     }
   });
 
-  // Roles — now includes manageability flags
+  // Roles — include manageability hints
   app.get('/api/guilds/:guildId/roles', async (req, res) => {
     try {
       const guild = await client.guilds.fetch(req.params.guildId);
@@ -141,7 +140,7 @@ module.exports = function startServer(client) {
     }
   });
 
-  // Full members (legacy)
+  // Legacy full members
   app.get('/api/guilds/:guildId/members', async (req, res) => {
     try {
       const { guildId } = req.params;
@@ -286,6 +285,33 @@ module.exports = function startServer(client) {
       const total = g?.memberCount ?? null;
 
       res.json({ guildId, page: { limit, after, nextAfter, total }, members });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Members search — finds new users immediately
+  app.get('/api/guilds/:guildId/members-search', async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const q = String(req.query.q || '').trim();
+      const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
+      if (!q) return res.json([]);
+
+      // Requires Guild Members intent enabled on the bot
+      const list = await rest.get(Routes.guildMembersSearch(guildId), {
+        query: { query: q, limit }
+      });
+
+      const members = list.map(m => ({
+        guildId,
+        discordUserId: String(m.user?.id),
+        username: m.user?.username || m.user?.global_name || String(m.user?.id),
+        roleIds: Array.isArray(m.roles) ? m.roles.map(String) : [],
+        accountid: null
+      }));
+      res.json(members);
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: err.message });

@@ -65,6 +65,7 @@ function requireRoleManager(client) {
 module.exports = function startServer(client) {
   const app = express();
   const PORT = process.env.PORT || 3001;
+
   const rest = client?.rest ?? new REST({ version: '10' }).setToken(process.env.TOKEN);
 
   // CORS + preflight
@@ -207,7 +208,22 @@ module.exports = function startServer(client) {
     }
   });
 
-  // Paged members
+  // Helper: fetch all members via REST pagination
+  async function fetchAllMembersREST(guildId, perPage = 1000, hardCap = 20000) {
+    let after = '0';
+    let all = [];
+    for (;;) {
+      const batch = await rest.get(Routes.guildMembers(guildId), { query: { limit: Math.min(perPage, 1000), after } });
+      if (!Array.isArray(batch) || batch.length === 0) break;
+      all.push(...batch);
+      after = String(batch[batch.length - 1].user.id);
+      if (batch.length < perPage) break;
+      if (all.length >= hardCap) break;
+    }
+    return all;
+  }
+
+  // Paged members (now supports all=true for small guilds)
   app.get('/api/guilds/:guildId/members-paged', async (req, res) => {
     try {
       const { guildId } = req.params;
@@ -216,13 +232,28 @@ module.exports = function startServer(client) {
       const q = req.query.q ? String(req.query.q) : '';
       const role = req.query.role ? String(req.query.role) : '';
       const group = req.query.group ? String(req.query.group) : '';
+      const wantAll = String(req.query.all || '').toLowerCase() === 'true';
 
       const premium = await isFeatureEnabled(guildId, 'custom_groups');
-      const limit = premium ? Math.min(rawLimit, 500) : Math.min(rawLimit, 100);
 
-      const page = await rest.get(Routes.guildMembers(guildId), { query: { limit, after } });
-      const ids = page.map(m => String(m.user?.id)).filter(Boolean);
+      // total members reported by Discord
+      const g = await client.guilds.fetch(guildId);
+      const total = g?.memberCount ?? null;
 
+      let rawMembers = [];
+      let nextAfter = null;
+
+      // Small guild mode: eager fetch all in one go if all=true or total <= 1000
+      if (wantAll || (typeof total === 'number' && total <= 1000)) {
+        rawMembers = await fetchAllMembersREST(guildId, 1000);
+      } else {
+        const page = await rest.get(Routes.guildMembers(guildId), { query: { limit: rawLimit, after } });
+        rawMembers = page;
+        nextAfter = page.length ? String(page[page.length - 1].user.id) : null;
+      }
+
+      // Build lookups for account and groups
+      const ids = rawMembers.map(m => String(m.user?.id)).filter(Boolean);
       let accountByDiscord = new Map();
       if (ids.length) {
         const ph = ids.map(() => '?').join(',');
@@ -250,7 +281,8 @@ module.exports = function startServer(client) {
         }
       }
 
-      let members = page.map(m => {
+      // Map to response shape
+      let members = rawMembers.map(m => {
         const discordId = String(m.user?.id);
         const accountid = accountByDiscord.get(discordId) || null;
         const base = {
@@ -263,6 +295,7 @@ module.exports = function startServer(client) {
         return premium ? { ...base, groups: accountid ? (groupsByAccount.get(accountid) || []) : [] } : base;
       });
 
+      // Filters
       if (q) {
         const qLower = q.toLowerCase();
         members = members.filter(m =>
@@ -277,21 +310,26 @@ module.exports = function startServer(client) {
       }
       if (premium && group) {
         const groups = group.split(',');
-        members = members.filter(m => Array.isArray(m.groups) && m.groups.some(g => groups.includes(g)));
+        members = members.filter(m => Array.isArray(m.groups) && m.groups.some(gp => groups.includes(gp)));
       }
 
-      const nextAfter = page.length ? String(page[page.length - 1].user.id) : null;
-      const g = await client.guilds.fetch(guildId);
-      const total = g?.memberCount ?? null;
-
-      res.json({ guildId, page: { limit, after, nextAfter, total }, members });
+      res.json({
+        guildId,
+        page: {
+          limit: wantAll ? (typeof total === 'number' ? Math.min(total, 1000) : members.length) : rawLimit,
+          after,
+          nextAfter: wantAll ? null : nextAfter,
+          total
+        },
+        members
+      });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: err.message });
     }
   });
 
-  // Members search — finds new users immediately
+  // Search members (REST search)
   app.get('/api/guilds/:guildId/members-search', async (req, res) => {
     try {
       const { guildId } = req.params;
@@ -299,7 +337,6 @@ module.exports = function startServer(client) {
       const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
       if (!q) return res.json([]);
 
-      // Requires Guild Members intent enabled on the bot
       const list = await rest.get(Routes.guildMembersSearch(guildId), {
         query: { query: q, limit }
       });

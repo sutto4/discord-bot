@@ -207,14 +207,15 @@ module.exports = function startServer(client) {
       });
       // --- END DEBUG LOGGING ---
       return {
-        guildId: guild.id,
-        discordUserId: m.id,
-        username: m.user?.username ?? m.user?.globalName ?? "unknown",
-        roleIds: Array.from(m.roles.cache.keys()),
-        accountid,
-        groups,
-        avatarUrl,
-      };
+      guildId: guild.id,
+      discordUserId: m.id,
+      username: m.user?.username ?? m.user?.globalName ?? "unknown",
+      roleIds: Array.from(m.roles.cache.keys()),
+      accountid,
+      groups,
+      avatar: m.user?.avatar ?? null, // <-- add this line
+      avatarUrl: toAvatarUrl(m.user, 64),
+    };
     });
 
     members = applyFilters(members, {

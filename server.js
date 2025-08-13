@@ -1,6 +1,6 @@
 // server.js
 const express = require("express");
-const { fivemDb, botDb } = require("./config/database");
+const { fivemDb, appDb } = require("./config/database");
 
 /**
  * Start the HTTP API that the Next.js app calls.
@@ -38,7 +38,7 @@ module.exports = function startServer(client) {
   async function buildFeatureFlags(guildId) {
     const features = {};
     try {
-      const [rows] = await botDb.query(
+      const [rows] = await appDb.query(
         "SELECT feature_name, enabled FROM guild_features WHERE guild_id = ?",
         [guildId]
       );

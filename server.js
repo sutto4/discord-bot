@@ -184,52 +184,52 @@ module.exports = function startServer(client) {
 
   // Members (legacy, full list) — includes avatarUrl
   app.get("/api/guilds/:guildId/members", async (req, res) => {
-  try {
-    const guild = await client.guilds.fetch(req.params.guildId);
-    await guild.members.fetch();
+    try {
+      const guild = await client.guilds.fetch(req.params.guildId);
+      await guild.members.fetch();
 
-    const { accountByDiscord, groupsByAccount } = await mapAccountsAndGroups();
+      const { accountByDiscord, groupsByAccount } = await mapAccountsAndGroups();
 
-    let members = guild.members.cache.map((m) => {
-      const acct = accountByDiscord.get(m.id);
-      const accountid = acct ? acct.accountid : null;
-      const groups =
-        accountid && groupsByAccount.has(accountid)
-          ? groupsByAccount.get(accountid)
-          : [];
-      // --- DEBUG LOGGING ---
-      const avatarUrl = toAvatarUrl(m.user, 64);
-      console.log({
-        userId: m.id,
-        username: m.user?.username,
-        avatarUrl,
-        userObj: m.user
+      let members = guild.members.cache.map((m) => {
+        const acct = accountByDiscord.get(m.id);
+        const accountid = acct ? acct.accountid : null;
+        const groups =
+          accountid && groupsByAccount.has(accountid)
+            ? groupsByAccount.get(accountid)
+            : [];
+        // --- DEBUG LOGGING ---
+        const avatarUrl = toAvatarUrl(m.user, 64);
+        console.log({
+          userId: m.id,
+          username: m.user?.username,
+          avatarUrl,
+          userObj: m.user
+        });
+        // --- END DEBUG LOGGING ---
+        return {
+          guildId: guild.id,
+          discordUserId: m.id,
+          username: m.user?.username ?? m.user?.globalName ?? "unknown",
+          roleIds: Array.from(m.roles.cache.keys()),
+          accountid,
+          groups,
+          avatar: m.user?.avatar ?? null, // Discord avatar hash (string or null)
+          avatarUrl: toAvatarUrl(m.user, 64), // Full CDN URL for avatar (always present, fallback to default)
+        };
       });
-      // --- END DEBUG LOGGING ---
-      return {
-      guildId: guild.id,
-      discordUserId: m.id,
-      username: m.user?.username ?? m.user?.globalName ?? "unknown",
-      roleIds: Array.from(m.roles.cache.keys()),
-      accountid,
-      groups,
-      avatar: m.user?.avatar ?? null, // <-- add this line
-      avatarUrl: toAvatarUrl(m.user, 64),
-    };
-    });
 
-    members = applyFilters(members, {
-      q: req.query.q,
-      role: req.query.role,
-      group: req.query.group,
-    });
+      members = applyFilters(members, {
+        q: req.query.q,
+        role: req.query.role,
+        group: req.query.group,
+      });
 
-    res.json(members);
-  } catch (err) {
-    console.error("members error", err);
-    res.status(500).json({ error: err.message });
-  }
-});
+      res.json(members);
+    } catch (err) {
+      console.error("members error", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   // Members (paged) — shape: { members, page:{ nextAfter, total? }, source, debug? }
   app.get("/api/guilds/:guildId/members-paged", async (req, res) => {
@@ -254,7 +254,8 @@ module.exports = function startServer(client) {
           roleIds: Array.from(m.roles.cache.keys()),
           accountid,
           groups,
-          avatarUrl: toAvatarUrl(m.user, 64),
+          avatar: m.user?.avatar ?? null, // Discord avatar hash (string or null)
+          avatarUrl: toAvatarUrl(m.user, 64), // Full CDN URL for avatar (always present, fallback to default)
         };
       });
 
@@ -307,7 +308,8 @@ module.exports = function startServer(client) {
           roleIds: Array.from(m.roles.cache.keys()),
           accountid,
           groups,
-          avatarUrl: toAvatarUrl(m.user, 64),
+          avatar: m.user?.avatar ?? null, // Discord avatar hash (string or null)
+          avatarUrl: toAvatarUrl(m.user, 64), // Full CDN URL for avatar (always present, fallback to default)
         };
       });
 

@@ -167,6 +167,7 @@ module.exports = function startServer(client) {
           guildId: guild.id,
           discordUserId: m.id,
           username: m.user.username,
+          avatar: m.user.avatar ?? null,
           roleIds: Array.from(m.roles.cache.keys()),
           accountid: info.accountid,
         };
@@ -189,8 +190,7 @@ module.exports = function startServer(client) {
       if (!Array.isArray(batch) || batch.length === 0) break;
       all.push(...batch);
       after = String(batch[batch.length - 1].user.id);
-      if (batch.length < perPage) break;
-      if (all.length >= hardCap) break;
+      if
     }
     return all;
   }

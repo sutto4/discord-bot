@@ -20,7 +20,8 @@ async function fetchBaseMembers(db, guildId) {
 		discord_id: r.discord_id,
 		discord_username: r.discord_username,
 		accountid: r.accountid,
-		roles: r.roles_json ? JSON.parse(r.roles_json) : []
+		roles: r.roles_json ? JSON.parse(r.roles_json) : [],
+		avatar: null // Not available from DB, placeholder for API consistency
 	}));
 }
 

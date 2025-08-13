@@ -162,19 +162,23 @@ module.exports = function startServer(client) {
       const guild = await client.guilds.fetch(req.params.guildId);
       await guild.roles.fetch();
       const me = guild.members.me;
-      const roles = guild.roles.cache.map((role) => ({
-        guildId: guild.id,
-        roleId: role.id,
-        name: role.name,
-        color: role.hexColor || null,
-        managed: role.managed,
-        editableByBot:
-          typeof role.editable === "boolean"
-            ? role.editable
-            : me
-            ? role.position < me.roles.highest.position
-            : false,
-      }));
+      // The following line does NOT guarantee order by hierarchy.
+      // To return roles in hierarchy order (highest first), sort by position descending:
+      const roles = guild.roles.cache
+        .sort((a, b) => b.position - a.position) // <-- sort by hierarchy
+        .map((role) => ({
+          guildId: guild.id,
+          roleId: role.id,
+          name: role.name,
+          color: role.hexColor || null,
+          managed: role.managed,
+          editableByBot:
+            typeof role.editable === "boolean"
+              ? role.editable
+              : me
+              ? role.position < me.roles.highest.position
+              : false,
+        }));
       res.json(roles);
     } catch (err) {
       console.error("roles error", err);

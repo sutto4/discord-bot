@@ -201,15 +201,6 @@ module.exports = function startServer(client) {
           accountid && groupsByAccount.has(accountid)
             ? groupsByAccount.get(accountid)
             : [];
-        // --- DEBUG LOGGING ---
-        const avatarUrl = toAvatarUrl(m.user, 64);
-        console.log({
-          userId: m.id,
-          username: m.user?.username,
-          avatarUrl,
-          userObj: m.user
-        });
-        // --- END DEBUG LOGGING ---
         return {
           guildId: guild.id,
           discordUserId: m.id,
@@ -219,6 +210,7 @@ module.exports = function startServer(client) {
           groups,
           avatar: m.user?.avatar ?? null, // Discord avatar hash (string or null)
           avatarUrl: toAvatarUrl(m.user, 64), // Full CDN URL for avatar (always present, fallback to default)
+            joinedAt: m.joinedAt ?? null, // Date the user joined the server
         };
       });
 

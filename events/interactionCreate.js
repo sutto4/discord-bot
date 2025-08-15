@@ -6,6 +6,67 @@ const { GuildDatabase } = require('../config/database-multi-guild');
 module.exports = {
 	name: Events.InteractionCreate,
 	async execute(interaction) {
+		// Handle Role Menu selects: customId = rr_menu_<internalId>
+		if (interaction.isStringSelectMenu() && interaction.customId && interaction.customId.startsWith('rr_menu_')) {
+			const { appDb } = require('../config/database');
+			try {
+				await interaction.deferReply({ ephemeral: true });
+				const internalIdStr = interaction.customId.slice('rr_menu_'.length);
+				const internalId = Number(internalIdStr);
+				if (!Number.isFinite(internalId)) {
+					return interaction.editReply({ content: 'Invalid menu id.' });
+				}
+				const selectedRoleIds = interaction.values.map(String);
+				const guild = interaction.guild;
+				if (!guild) return interaction.editReply({ content: 'No guild.' });
+				const member = await guild.members.fetch(interaction.user.id).catch(() => null);
+				if (!member) return interaction.editReply({ content: 'Member not found.' });
+
+				// Load allowed roles for this menu from DB
+				const [maps] = await appDb.execute(
+					`SELECT role_id FROM reaction_role_mappings WHERE reaction_role_message_id = ?`,
+					[internalId]
+				);
+				const allowed = Array.isArray(maps) ? maps.map(r => String(r.role_id)) : [];
+				if (allowed.length === 0) return interaction.editReply({ content: 'No roles configured for this menu.' });
+
+				const allowedSet = new Set(allowed);
+				const desired = new Set(selectedRoleIds.filter(id => allowedSet.has(id)));
+				const current = new Set(member.roles.cache.map(r => r.id).filter(id => allowedSet.has(id)));
+
+				const toAdd = [...desired].filter(id => !current.has(id));
+				const toRemove = [...current].filter(id => !desired.has(id));
+
+				// Apply changes respecting permissions
+				const added = [];
+				const removed = [];
+				for (const rid of toAdd) {
+					const role = await guild.roles.fetch(rid).catch(() => null);
+					if (role && role.editable) {
+						await member.roles.add(role).catch(() => {});
+						added.push(role.name);
+					}
+				}
+				for (const rid of toRemove) {
+					const role = await guild.roles.fetch(rid).catch(() => null);
+					if (role && role.editable) {
+						await member.roles.remove(role).catch(() => {});
+						removed.push(role.name);
+					}
+				}
+
+				const parts = [];
+				if (added.length) parts.push(`Added: ${added.join(', ')}`);
+				if (removed.length) parts.push(`Removed: ${removed.join(', ')}`);
+				if (parts.length === 0) parts.push('No changes.');
+				await interaction.editReply({ content: parts.join(' \n') });
+				return;
+			} catch (e) {
+				try { await interaction.editReply({ content: 'Failed to update roles.' }); } catch {}
+				return;
+			}
+		}
+
 		// Handle verify button
 		if (interaction.isButton() && interaction.customId === 'verify_button') {
 			let success = false;

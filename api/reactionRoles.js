@@ -24,11 +24,24 @@ async function fetchMessageDetails(guildId, channelId, messageId) {
     return {
       enabled,
       embed: {
-        title: embed?.title || null,
-        description: embed?.description || null,
+        title: embed?.title || embed?.data?.title || null,
+        description: embed?.description || embed?.data?.description || null,
         color,
-        thumbnailUrl: embed?.thumbnail?.url || null,
-        imageUrl: embed?.image?.url || null,
+        thumbnailUrl: embed?.thumbnail?.url || embed?.data?.thumbnail?.url || null,
+        imageUrl: embed?.image?.url || embed?.data?.image?.url || null,
+        author: embed?.author || embed?.data?.author
+          ? {
+              name: (embed?.author?.name || embed?.data?.author?.name) || null,
+              iconUrl: (embed?.author?.iconURL || embed?.data?.author?.icon_url) || null,
+            }
+          : null,
+        footer: embed?.footer || embed?.data?.footer
+          ? {
+              text: (embed?.footer?.text || embed?.data?.footer?.text) || null,
+              iconUrl: (embed?.footer?.iconURL || embed?.data?.footer?.icon_url) || null,
+            }
+          : null,
+        timestamp: embed?.timestamp || embed?.data?.timestamp || null,
       },
       menu: { placeholder, minValues, maxValues },
     };
@@ -143,7 +156,7 @@ router.patch('/:messageId', async (req, res) => {
   try {
     const guildId = req.params.guildId;
     const messageId = req.params.messageId;
-    const { title, description, color, thumbnailUrl, imageUrl, roleIds, placeholder, minValues, maxValues, enabled } = req.body || {};
+    const { title, description, color, thumbnailUrl, imageUrl, roleIds, placeholder, minValues, maxValues, enabled, author, footer, timestamp } = req.body || {};
     if (!isId(guildId) || !isId(messageId)) return res.status(400).json({ error: 'Invalid ids' });
 
     // Look up internal id and channel
@@ -167,6 +180,16 @@ router.patch('/:messageId', async (req, res) => {
     if (color != null) embed.setColor(Number(color) || 0x5865F2);
     if (thumbnailUrl) embed.setThumbnail(String(thumbnailUrl));
     if (imageUrl) embed.setImage(String(imageUrl));
+    if (author && (author.name || author.iconUrl)) {
+      embed.setAuthor({ name: String(author.name || '\u200b'), iconURL: author.iconUrl ? String(author.iconUrl) : undefined });
+    }
+    if (footer && (footer.text || footer.iconUrl)) {
+      embed.setFooter({ text: String(footer.text || '\u200b'), iconURL: footer.iconUrl ? String(footer.iconUrl) : undefined });
+    }
+    if (timestamp) {
+      const ts = new Date(Number(timestamp));
+      if (!isNaN(ts.getTime())) embed.setTimestamp(ts);
+    }
 
     // Build select (if roleIds provided)
     let components = discordMsg.components;

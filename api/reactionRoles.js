@@ -151,6 +151,101 @@ router.post('/', async (req, res) => {
   }
 });
 
+// POST /guilds/:guildId/reaction-roles/publish-menu (create message + menu)
+router.post('/publish-menu', async (req, res) => {
+  try {
+    const guildId = req.params.guildId;
+    const {
+      channelId,
+      title,
+      description,
+      color,
+      thumbnailUrl,
+      imageUrl,
+      author,
+      footer,
+      timestamp,
+      roleIds,
+      placeholder,
+      minValues,
+      maxValues,
+    } = req.body || {};
+
+    if (!isId(guildId) || !isId(channelId)) return res.status(400).json({ error: 'Invalid ids' });
+    if (!Array.isArray(roleIds) || roleIds.length === 0) return res.status(400).json({ error: 'roleIds required' });
+
+    const guild = await client.guilds.fetch(guildId);
+    const channel = await guild.channels.fetch(String(channelId));
+    if (!channel || !channel.isTextBased()) return res.status(400).json({ error: 'Invalid channel' });
+
+    // Build embed
+    const embed = new EmbedBuilder();
+    if (title != null) embed.setTitle(String(title));
+    if (description != null) embed.setDescription(String(description));
+    if (color != null) embed.setColor(Number(color) || 0x5865F2);
+    if (thumbnailUrl) embed.setThumbnail(String(thumbnailUrl));
+    if (imageUrl) embed.setImage(String(imageUrl));
+    if (author && (author.name || author.iconUrl)) {
+      embed.setAuthor({ name: String(author.name || '\u200b'), iconURL: author.iconUrl ? String(author.iconUrl) : undefined });
+    }
+    if (footer && (footer.text || footer.iconUrl)) {
+      embed.setFooter({ text: String(footer.text || '\u200b'), iconURL: footer.iconUrl ? String(footer.iconUrl) : undefined });
+    }
+    if (timestamp) {
+      const ts = new Date(Number(timestamp));
+      if (!isNaN(ts.getTime())) embed.setTimestamp(ts);
+    }
+
+    // Build select menu
+    const options = [];
+    for (const id of roleIds) {
+      if (!isId(id)) continue;
+      const role = await guild.roles.fetch(id).catch(() => null);
+      if (!role) continue;
+      options.push({ label: role.name, value: role.id });
+    }
+    if (options.length === 0) return res.status(400).json({ error: 'No valid roles' });
+
+    const select = new StringSelectMenuBuilder()
+      .setCustomId('rr_menu_new')
+      .setPlaceholder(placeholder || 'Select roles')
+      .setMinValues(Math.max(0, Math.min(options.length, Number(minValues ?? 0))))
+      .setMaxValues(Math.max(1, Math.min(options.length, Number(maxValues ?? options.length))))
+      .addOptions(options);
+    const row = new ActionRowBuilder().addComponents(select);
+
+    const sent = await channel.send({ embeds: [embed], components: [row] });
+
+    // Persist in DB
+    await appDb.execute(
+      `INSERT INTO reaction_role_messages (guild_id, channel_id, message_id)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE channel_id = VALUES(channel_id), updated_at = CURRENT_TIMESTAMP`,
+      [guildId, channelId, sent.id]
+    );
+
+    // Find internal id
+    const [rows] = await appDb.execute(
+      `SELECT id FROM reaction_role_messages WHERE guild_id = ? AND message_id = ? LIMIT 1`,
+      [guildId, sent.id]
+    );
+    const msg = Array.isArray(rows) && rows[0];
+    if (msg) {
+      const placeholders3 = roleIds.map(() => '(?, ?, ?, ?)').join(',');
+      const values3 = [];
+      for (const rid of roleIds) values3.push(msg.id, null, null, rid);
+      await appDb.execute(
+        `INSERT INTO reaction_role_mappings (reaction_role_message_id, emoji, emoji_id, role_id) VALUES ${placeholders3}`,
+        values3
+      );
+    }
+
+    return res.json({ ok: true, messageId: sent.id });
+  } catch (e) {
+    return res.status(500).json({ error: e.message || 'publish_failed' });
+  }
+});
+
 // PATCH /guilds/:guildId/reaction-roles/:messageId (edit embed/menu/roles, enable/disable)
 router.patch('/:messageId', async (req, res) => {
   try {

@@ -77,6 +77,7 @@ async function fetchMessageDetails(guildId, channelId, messageId) {
         timestamp: embed?.timestamp || embed?.data?.timestamp || null,
       },
       menu: { placeholder, minValues, maxValues },
+      createdBy: msg.author?.id || null,
     };
   } catch { return null; }
 }
@@ -119,6 +120,7 @@ router.get('/', async (req, res) => {
         enabled: details?.enabled ?? null,
         embed: details?.embed ?? null,
         menu: details?.menu ?? null,
+        createdBy: details?.createdBy || null,
       });
     }
     res.json({ configs: out });
@@ -278,7 +280,11 @@ router.post('/publish-menu', async (req, res) => {
       );
     }
 
-    return res.json({ ok: true, messageId: sent.id });
+    // Return creator info if available (request auth may provide it via upstream proxy headers)
+    const userId = req.headers['x-user-id'] ? String(req.headers['x-user-id']) : null;
+    const username = req.headers['x-user-name'] ? String(req.headers['x-user-name']) : null;
+    const createdBy = userId || username ? { id: userId, username } : null;
+    return res.json({ ok: true, messageId: sent.id, createdBy });
   } catch (e) {
     return res.status(500).json({ error: e.message || 'publish_failed' });
   }

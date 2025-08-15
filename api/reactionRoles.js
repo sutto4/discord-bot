@@ -6,6 +6,39 @@ const client = require('../config/bot');
 
 function isId(v) { return /^[0-9]{5,20}$/.test(String(v)); }
 
+/**
+ * Resolve @username patterns in text to actual <@userId> mentions.
+ * - Matches tokens like "@sutto" and tries to resolve by username or displayName.
+ * - Limits to a small number of lookups to avoid abuse.
+ * - Returns { text, userIds } where userIds should be passed to allowedMentions.users.
+ */
+async function resolveUserMentions(guild, text) {
+  try {
+    if (!text || typeof text !== 'string') return { text, userIds: [] };
+    // Fetch members to ensure we can resolve names (requires GUILD_MEMBERS intent)
+    try { await guild.members.fetch(); } catch {}
+    const maxMentions = 10;
+    const userIds = new Set();
+    // Match @word with a safe character set; avoid already-formatted <@id>
+    const re = /(^|[^<\w])@([A-Za-z0-9_.]{2,32})/g;
+    const replaced = text.replace(re, (m, prefix, name) => {
+      if (userIds.size >= maxMentions) return m;
+      // Find by username or displayName (case-insensitive)
+      const lower = String(name).toLowerCase();
+      const member = guild.members.cache.find(
+        (mem) =>
+          mem.user?.username?.toLowerCase() === lower ||
+          mem.displayName?.toLowerCase() === lower ||
+          mem.user?.globalName?.toLowerCase?.() === lower
+      );
+      if (!member) return m;
+      userIds.add(member.id);
+      return `${prefix}<@${member.id}>`;
+    });
+    return { text: replaced, userIds: Array.from(userIds) };
+  } catch { return { text, userIds: [] }; }
+}
+
 async function fetchMessageDetails(guildId, channelId, messageId) {
   try {
     const guild = await client.guilds.fetch(guildId);
@@ -181,7 +214,12 @@ router.post('/publish-menu', async (req, res) => {
     // Build embed
     const embed = new EmbedBuilder();
     if (title != null) embed.setTitle(String(title));
-    if (description != null) embed.setDescription(String(description));
+    let allowedMentions = undefined;
+    if (description != null) {
+      const { text, userIds } = await resolveUserMentions(guild, String(description));
+      embed.setDescription(text);
+      if (userIds.length > 0) allowedMentions = { parse: [], users: userIds };
+    }
     if (color != null) embed.setColor(Number(color) || 0x5865F2);
     if (thumbnailUrl) embed.setThumbnail(String(thumbnailUrl));
     if (imageUrl) embed.setImage(String(imageUrl));
@@ -214,7 +252,7 @@ router.post('/publish-menu', async (req, res) => {
       .addOptions(options);
     const row = new ActionRowBuilder().addComponents(select);
 
-    const sent = await channel.send({ embeds: [embed], components: [row] });
+    const sent = await channel.send({ embeds: [embed], components: [row], ...(allowedMentions ? { allowedMentions } : {}) });
 
     // Persist in DB
     await appDb.execute(
@@ -271,7 +309,12 @@ router.patch('/:messageId', async (req, res) => {
     // Build embed
     const embed = new EmbedBuilder();
     if (title != null) embed.setTitle(String(title));
-    if (description != null) embed.setDescription(String(description));
+    let allowedMentions = undefined;
+    if (description != null) {
+      const { text, userIds } = await resolveUserMentions(guild, String(description));
+      embed.setDescription(text);
+      if (userIds.length > 0) allowedMentions = { parse: [], users: userIds };
+    }
     if (color != null) embed.setColor(Number(color) || 0x5865F2);
     if (thumbnailUrl) embed.setThumbnail(String(thumbnailUrl));
     if (imageUrl) embed.setImage(String(imageUrl));
@@ -328,7 +371,7 @@ router.patch('/:messageId', async (req, res) => {
       }
     }
 
-    await discordMsg.edit({ embeds: [embed], components });
+    await discordMsg.edit({ embeds: [embed], components, ...(allowedMentions ? { allowedMentions } : {}) });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message || 'Server error' });

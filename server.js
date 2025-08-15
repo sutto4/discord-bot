@@ -24,6 +24,12 @@ module.exports = function startServer(client) {
   // Health
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
+  // Mount reaction roles API (non-prefixed to match UI proxy expectations)
+  try {
+    const reactionRoles = require('./api/reactionRoles');
+    app.use('/guilds/:guildId/reaction-roles', reactionRoles);
+  } catch {}
+
   // ---- Helpers ----
   function toAvatarUrl(user, size = 64) {
     try {

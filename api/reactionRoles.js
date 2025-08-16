@@ -4,6 +4,9 @@ const { appDb } = require('../config/database');
 const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 const client = require('../config/bot');
 
+// In-memory map: messageId -> { id, username }
+const createdByCache = new Map();
+
 function isId(v) { return /^[0-9]{5,20}$/.test(String(v)); }
 
 /**
@@ -77,7 +80,7 @@ async function fetchMessageDetails(guildId, channelId, messageId) {
         timestamp: embed?.timestamp || embed?.data?.timestamp || null,
       },
       menu: { placeholder, minValues, maxValues },
-      createdBy: msg.author?.id || null,
+      createdBy: createdByCache.get(String(messageId)) || null,
     };
   } catch { return null; }
 }
@@ -215,8 +218,8 @@ router.post('/publish-menu', async (req, res) => {
 
     // Build embed
     const embed = new EmbedBuilder();
-    if (title != null) embed.setTitle(String(title));
     let allowedMentions = undefined;
+    if (title != null) embed.setTitle(String(title));
     if (description != null) {
       const { text, userIds } = await resolveUserMentions(guild, String(description));
       embed.setDescription(text);
@@ -280,11 +283,14 @@ router.post('/publish-menu', async (req, res) => {
       );
     }
 
-    // Return creator info if available (request auth may provide it via upstream proxy headers)
+    // Cache createdBy for GET list
     const userId = req.headers['x-user-id'] ? String(req.headers['x-user-id']) : null;
     const username = req.headers['x-user-name'] ? String(req.headers['x-user-name']) : null;
-    const createdBy = userId || username ? { id: userId, username } : null;
-    return res.json({ ok: true, messageId: sent.id, createdBy });
+    if (userId || username) {
+      createdByCache.set(String(sent.id), { id: userId, username });
+    }
+
+    return res.json({ ok: true, messageId: sent.id, createdBy: createdByCache.get(String(sent.id)) || null });
   } catch (e) {
     return res.status(500).json({ error: e.message || 'publish_failed' });
   }
@@ -314,8 +320,8 @@ router.patch('/:messageId', async (req, res) => {
 
     // Build embed
     const embed = new EmbedBuilder();
-    if (title != null) embed.setTitle(String(title));
     let allowedMentions = undefined;
+    if (title != null) embed.setTitle(String(title));
     if (description != null) {
       const { text, userIds } = await resolveUserMentions(guild, String(description));
       embed.setDescription(text);

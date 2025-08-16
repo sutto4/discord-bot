@@ -28,10 +28,34 @@ module.exports = function startServer(client) {
   app.get("/api/guilds", async (_req, res) => {
     try {
       const [rows] = await appDb.query("SELECT guild_id, guild_name FROM guilds");
-      const guilds = rows.map(row => ({
-        guild_id: row.guild_id,
-        guild_name: row.guild_name
+      
+      // Get detailed guild info including member and role counts
+      const guilds = await Promise.all(rows.map(async (row) => {
+        try {
+          const guild = await client.guilds.fetch(row.guild_id);
+          await guild.roles.fetch();
+          
+          return {
+            guild_id: row.guild_id,
+            guild_name: row.guild_name,
+            memberCount: guild.memberCount || 0,
+            roleCount: guild.roles.cache.size || 0,
+            iconUrl: guild.iconURL ? guild.iconURL({ size: 128, extension: "png" }) : null,
+            createdAt: guild.createdAt ? guild.createdAt.toISOString() : null
+          };
+        } catch (err) {
+          // Fallback if we can't fetch guild details
+          return {
+            guild_id: row.guild_id,
+            guild_name: row.guild_name,
+            memberCount: 0,
+            roleCount: 0,
+            iconUrl: null,
+            createdAt: null
+          };
+        }
       }));
+      
       res.json(guilds);
     } catch (err) {
       console.error("guilds endpoint error", err);

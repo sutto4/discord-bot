@@ -29,32 +29,36 @@ module.exports = function startServer(client) {
     try {
       const [rows] = await appDb.query("SELECT guild_id, guild_name FROM guilds");
       
-      // Get detailed guild info including member and role counts
-      const guilds = await Promise.all(rows.map(async (row) => {
-        try {
-          const guild = await client.guilds.fetch(row.guild_id);
-          await guild.roles.fetch();
-          
-          return {
-            guild_id: row.guild_id,
-            guild_name: row.guild_name,
-            memberCount: guild.memberCount || 0,
-            roleCount: guild.roles.cache.size || 0,
-            iconUrl: guild.iconURL ? guild.iconURL({ size: 128, extension: "png" }) : null,
-            createdAt: guild.createdAt ? guild.createdAt.toISOString() : null
-          };
-        } catch (err) {
-          // Fallback if we can't fetch guild details
-          return {
-            guild_id: row.guild_id,
-            guild_name: row.guild_name,
-            memberCount: 0,
-            roleCount: 0,
-            iconUrl: null,
-            createdAt: null
-          };
-        }
-      }));
+             // Get detailed guild info including member and role counts
+       const guilds = await Promise.all(rows.map(async (row) => {
+         try {
+           console.log(`🔍 Fetching details for guild: ${row.guild_name} (${row.guild_id})`);
+           const guild = await client.guilds.fetch(row.guild_id);
+           console.log(`✅ Fetched guild: ${guild.name}, members: ${guild.memberCount}, roles: ${guild.roles.cache.size}`);
+           
+           await guild.roles.fetch();
+           
+           return {
+             guild_id: row.guild_id,
+             guild_name: row.guild_name,
+             memberCount: guild.memberCount || 0,
+             roleCount: guild.roles.cache.size || 0,
+             iconUrl: guild.iconURL ? guild.iconURL({ size: 128, extension: "png" }) : null,
+             createdAt: guild.createdAt ? guild.createdAt.toISOString() : null
+           };
+         } catch (err) {
+           console.error(`❌ Error fetching guild ${row.guild_name}:`, err.message);
+           // Fallback if we can't fetch guild details
+           return {
+             guild_id: row.guild_id,
+             guild_name: row.guild_name,
+             memberCount: 0,
+             roleCount: 0,
+             iconUrl: null,
+             createdAt: null
+           };
+         }
+       }));
       
       res.json(guilds);
     } catch (err) {

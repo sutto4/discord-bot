@@ -24,6 +24,21 @@ module.exports = function startServer(client) {
   // Health
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
+  // Get all guilds where the bot is installed
+  app.get("/api/guilds", async (_req, res) => {
+    try {
+      const [rows] = await appDb.query("SELECT guild_id, guild_name FROM guilds");
+      const guilds = rows.map(row => ({
+        guild_id: row.guild_id,
+        guild_name: row.guild_name
+      }));
+      res.json(guilds);
+    } catch (err) {
+      console.error("guilds endpoint error", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Mount reaction roles API (non-prefixed to match UI proxy expectations)
   try {
     const reactionRoles = require('./api/reactionRoles');

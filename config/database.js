@@ -17,7 +17,7 @@ const appDb = mysql.createPool({
 	host: process.env.APP_DB_HOST || process.env.BOT_DB_HOST || '127.0.0.1',
 	user: process.env.APP_DB_USER || process.env.BOT_DB_USER || 'root',
 	password: process.env.APP_DB_PASSWORD || process.env.BOT_DB_PASSWORD || '',
-	database: process.env.APP_DB_NAME || process.env.BOT_DB_NAME || 'discordbot',
+	database: process.env.APP_DB_NAME || process.env.BOT_DB_NAME || 'chester_bot',
 	port: Number(process.env.APP_DB_PORT || process.env.BOT_DB_PORT || 3306),
 	waitForConnections: true,
 	connectionLimit: 10

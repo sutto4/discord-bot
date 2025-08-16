@@ -149,33 +149,8 @@ module.exports = function startServer(client) {
     }
   });
 
-  // Guilds list
-  app.get("/api/guilds", async (_req, res) => {
-    try {
-      const guilds = await Promise.all(
-        client.guilds.cache.map(async (g) => {
-          const guild = await client.guilds.fetch(g.id);
-          await guild.roles.fetch();
-          const iconUrl = guild.iconURL
-            ? guild.iconURL({ size: 128, extension: "png" })
-            : null;
-          return {
-            id: guild.id,
-            name: guild.name,
-            memberCount: guild.memberCount ?? 0,
-            roleCount: guild.roles.cache.size ?? 0,
-            iconUrl,
-            premium: false,
-            createdAt: guild.createdAt ? guild.createdAt.toISOString() : null,
-          };
-        })
-      );
-      res.json(guilds);
-    } catch (err) {
-      console.error("guilds error", err);
-      res.status(500).json({ error: err.message });
-    }
-  });
+  // Guilds list - REMOVED: This was returning ALL Discord guilds instead of just bot-installed ones
+  // The endpoint above (line 37-46) now handles this correctly by querying the database
 
   // Roles for a guild
   app.get("/api/guilds/:guildId/roles", async (req, res) => {

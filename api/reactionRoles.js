@@ -7,7 +7,59 @@ const client = require('../config/bot');
 // In-memory map: messageId -> { id, username }
 const createdByCache = new Map();
 
+// In-memory storage for bot customisation (in production, this would be in a database)
+const botCustomisationStore = new Map();
+
 function isId(v) { return /^[0-9]{5,20}$/.test(String(v)); }
+
+/**
+ * Fetch bot customisation settings for a guild
+ */
+async function getBotCustomisation(guildId) {
+  // For now, return from in-memory store
+  // TODO: In production, fetch from database
+  return botCustomisationStore.get(guildId) || { botName: null, botAvatarUrl: null };
+}
+
+/**
+ * Temporarily change bot appearance and send message, then restore
+ */
+async function sendMessageWithCustomBot(channel, messageOptions, guildId) {
+  const customSettings = await getBotCustomisation(guildId);
+  let originalUsername = null;
+  let originalAvatar = null;
+  
+  try {
+    // Store original bot appearance
+    originalUsername = client.user.username;
+    originalAvatar = client.user.avatarURL();
+    
+    // Apply custom bot appearance if set
+    if (customSettings.botName && customSettings.botName.trim()) {
+      await client.user.setUsername(customSettings.botName.trim());
+    }
+    if (customSettings.botAvatarUrl && customSettings.botAvatarUrl.trim()) {
+      await client.user.setAvatar(customSettings.botAvatarUrl.trim());
+    }
+    
+    // Send the message
+    const sent = await channel.send(messageOptions);
+    
+    return sent;
+  } finally {
+    // Always restore original bot appearance
+    try {
+      if (originalUsername && originalUsername !== client.user.username) {
+        await client.user.setUsername(originalUsername);
+      }
+      if (originalAvatar && originalAvatar !== client.user.avatarURL()) {
+        await client.user.setAvatar(originalAvatar);
+      }
+    } catch (restoreError) {
+      console.error('Failed to restore bot appearance:', restoreError);
+    }
+  }
+}
 
 /**
  * Resolve @username patterns in text to actual <@userId> mentions.
@@ -257,7 +309,7 @@ router.post('/publish-menu', async (req, res) => {
       .addOptions(options);
     const row = new ActionRowBuilder().addComponents(select);
 
-    const sent = await channel.send({ embeds: [embed], components: [row], ...(allowedMentions ? { allowedMentions } : {}) });
+    const sent = await sendMessageWithCustomBot(channel, { embeds: [embed], components: [row], ...(allowedMentions ? { allowedMentions } : {}) }, guildId);
 
     // Persist in DB
     await appDb.execute(
@@ -293,6 +345,58 @@ router.post('/publish-menu', async (req, res) => {
     return res.json({ ok: true, messageId: sent.id, createdBy: createdByCache.get(String(sent.id)) || null });
   } catch (e) {
     return res.status(500).json({ error: e.message || 'publish_failed' });
+  }
+});
+
+// POST /guilds/:guildId/reaction-roles/sync-bot-customisation
+router.post('/sync-bot-customisation', async (req, res) => {
+  try {
+    const guildId = req.params.guildId;
+    if (!isId(guildId)) return res.status(400).json({ error: 'Invalid guild id' });
+
+    const { botName, botAvatarUrl } = req.body || {};
+
+    // Validate inputs
+    if (botName && typeof botName === 'string' && botName.length > 32) {
+      return res.status(400).json({ error: 'Bot name must be 32 characters or less' });
+    }
+
+    if (botAvatarUrl && typeof botAvatarUrl === 'string') {
+      try {
+        new URL(botAvatarUrl);
+      } catch {
+        return res.status(400).json({ error: 'Invalid avatar URL format' });
+      }
+    }
+
+    // Store the settings in memory (in production, this would be in a database)
+    botCustomisationStore.set(guildId, {
+      botName: botName || null,
+      botAvatarUrl: botAvatarUrl || null
+    });
+
+    return res.json({ 
+      success: true, 
+      botName: botName || null, 
+      botAvatarUrl: botAvatarUrl || null 
+    });
+  } catch (error) {
+    console.error("Error syncing bot customisation:", error);
+    return res.status(500).json({ error: "Failed to sync bot settings" });
+  }
+});
+
+// GET /guilds/:guildId/reaction-roles/bot-customisation
+router.get('/bot-customisation', async (req, res) => {
+  try {
+    const guildId = req.params.guildId;
+    if (!isId(guildId)) return res.status(400).json({ error: 'Invalid guild id' });
+
+    const settings = await getBotCustomisation(guildId);
+    return res.json(settings);
+  } catch (error) {
+    console.error("Error getting bot customisation:", error);
+    return res.status(500).json({ error: "Failed to get bot settings" });
   }
 });
 

@@ -192,23 +192,65 @@ module.exports = function startServer(client) {
       const guild = await client.guilds.fetch(req.params.guildId);
       await guild.roles.fetch();
       const me = guild.members.me;
-      // The following line does NOT guarantee order by hierarchy.
-      // To return roles in hierarchy order (highest first), sort by position descending:
-      const roles = guild.roles.cache
-        .sort((a, b) => b.position - a.position) // <-- sort by hierarchy
-        .map((role) => ({
-          guildId: guild.id,
-          roleId: role.id,
-          name: role.name,
-          color: role.hexColor || null,
-          managed: role.managed,
-          editableByBot:
-            typeof role.editable === "boolean"
-              ? role.editable
-              : me
-              ? role.position < me.roles.highest.position
-              : false,
-        }));
+      
+      // Try to get permissions from Discord REST API directly
+      let rolesWithPermissions = [];
+      try {
+        // Use Discord REST API to get roles with permissions
+        const response = await fetch(`https://discord.com/api/v10/guilds/${guild.id}/roles`, {
+          headers: {
+            'Authorization': `Bot ${client.token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const discordRoles = await response.json();
+          console.log(`🔍 Discord API returned ${discordRoles.length} roles for guild ${guild.name}`);
+          console.log(`📋 Sample role permissions:`, discordRoles.slice(0, 3).map(r => ({ name: r.name, permissions: r.permissions })));
+          
+          rolesWithPermissions = discordRoles.map((role) => ({
+            guildId: guild.id,
+            roleId: role.id,
+            name: role.name,
+            color: role.hexColor || null,
+            position: role.position,
+            managed: role.managed,
+            editableByBot:
+              typeof role.editable === "boolean"
+                ? role.editable
+                : me
+                ? role.position < me.roles.highest.position
+                : false,
+            permissions: role.permissions || [], // Discord API permissions
+          }));
+        } else {
+          throw new Error(`Discord API returned ${response.status}`);
+        }
+      } catch (discordApiError) {
+        console.warn("Failed to fetch from Discord API, falling back to cache:", discordApiError.message);
+        // Fallback to cache method
+        rolesWithPermissions = guild.roles.cache
+          .sort((a, b) => b.position - a.position)
+          .map((role) => ({
+            guildId: guild.id,
+            roleId: role.id,
+            name: role.name,
+            color: role.hexColor || null,
+            position: role.position,
+            managed: role.managed,
+            editableByBot:
+              typeof role.editable === "boolean"
+                ? role.editable
+                : me
+                ? role.position < me.roles.highest.position
+                : false,
+            permissions: role.permissions.toArray(), // Cache permissions
+          }));
+      }
+      
+      // Sort by hierarchy (highest first)
+      const roles = rolesWithPermissions.sort((a, b) => b.position - a.position);
       res.json(roles);
     } catch (err) {
       console.error("roles error", err);

@@ -40,12 +40,12 @@ async function saveEmbeddedMessageConfig(guildId, config) {
       // Update existing
       await appDb.query(
         `UPDATE embedded_messages SET 
-          channel_id = ?, title = ?, description = ?, color = ?, 
+          channel_id = ?, message_id = ?, title = ?, description = ?, color = ?, 
           image_url = ?, thumbnail_url = ?, author_name = ?, author_icon_url = ?, 
           footer_text = ?, footer_icon_url = ?, timestamp = ?, enabled = ?, updated_at = NOW()
           WHERE id = ? AND guild_id = ?`,
         [
-          config.channelId, config.title, config.description, config.color,
+          config.channelId, config.messageId, config.title, config.description, config.color,
           config.imageUrl, config.thumbnailUrl, authorName, authorIconUrl,
           footerText, footerIconUrl, config.timestamp, config.enabled !== false ? 1 : 0,
           config.id, guildId
@@ -56,12 +56,12 @@ async function saveEmbeddedMessageConfig(guildId, config) {
       // Create new
       const [result] = await appDb.query(
         `INSERT INTO embedded_messages (
-          guild_id, channel_id, title, description, color, 
+          guild_id, channel_id, message_id, title, description, color, 
           image_url, thumbnail_url, author_name, author_icon_url, 
           footer_text, footer_icon_url, timestamp, enabled, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
         [
-          guildId, config.channelId, config.title, config.description, config.color,
+          guildId, config.channelId, config.messageId, config.title, config.description, config.color,
           config.imageUrl, config.thumbnailUrl, authorName, authorIconUrl,
           footerText, footerIconUrl, config.timestamp, config.enabled !== false ? 1 : 0
         ]
@@ -193,13 +193,20 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Invalid channel ID' });
     }
 
-    // Save the configuration
+    // Save the configuration first (without message_id)
     const configId = await saveEmbeddedMessageConfig(guildId, config);
     
     // If enabled, send the message
     if (config.enabled) {
       try {
-        await sendEmbeddedMessage(guildId, { ...config, id: configId });
+        const sentMessage = await sendEmbeddedMessage(guildId, { ...config, id: configId });
+        
+        // Update the configuration with the Discord message ID
+        await appDb.query(
+          `UPDATE embedded_messages SET message_id = ? WHERE id = ? AND guild_id = ?`,
+          [sentMessage.id, configId, guildId]
+        );
+        
         res.json({ 
           success: true, 
           id: configId, 
@@ -236,14 +243,70 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid guild ID or config ID' });
     }
 
+    // Get existing config to check if we need to delete old message
+    const [existingRows] = await appDb.query(
+      `SELECT message_id, channel_id FROM embedded_messages WHERE id = ? AND guild_id = ? LIMIT 1`,
+      [id, guildId]
+    );
+    
+    const existingConfig = Array.isArray(existingRows) && existingRows[0];
+    
+    // If enabled and we have an existing message, delete it first
+    if (config.enabled && existingConfig && existingConfig.message_id) {
+      try {
+        const guild = await client.guilds.fetch(guildId);
+        const channel = await guild.channels.fetch(String(existingConfig.channel_id));
+        if (channel && channel.isTextBased()) {
+          const oldMessage = await channel.messages.fetch(existingConfig.message_id).catch(() => null);
+          if (oldMessage) {
+            await oldMessage.delete().catch(() => {});
+            console.log(`🗑️ Deleted old Discord message ${existingConfig.message_id} when updating`);
+          }
+        }
+      } catch (discordError) {
+        console.log(`⚠️ Failed to delete old Discord message: ${discordError.message}`);
+      }
+    }
+
     config.id = id;
     const configId = await saveEmbeddedMessageConfig(guildId, config);
     
-    res.json({ 
-      success: true, 
-      id: configId, 
-      message: 'Configuration updated successfully' 
-    });
+    // If enabled, send new message and update message_id
+    if (config.enabled) {
+      try {
+        const sentMessage = await sendEmbeddedMessage(guildId, { ...config, id: configId });
+        
+        // Update the configuration with the new Discord message ID
+        await appDb.query(
+          `UPDATE embedded_messages SET message_id = ? WHERE id = ? AND guild_id = ?`,
+          [sentMessage.id, configId, guildId]
+        );
+        
+        res.json({ 
+          success: true, 
+          id: configId, 
+          message: 'Configuration updated and new message published successfully' 
+        });
+      } catch (sendError) {
+        res.json({ 
+          success: true, 
+          id: configId, 
+          warning: 'Configuration updated but failed to send new message: ' + sendError.message 
+        });
+      }
+    } else {
+      // If disabled, clear the message_id
+      await appDb.query(
+        `UPDATE embedded_messages SET message_id = NULL WHERE id = ? AND guild_id = ?`,
+        [configId, guildId]
+      );
+      
+      res.json({ 
+        success: true, 
+        id: configId, 
+        message: 'Configuration updated successfully' 
+      });
+    }
   } catch (error) {
     console.error('PUT /embedded-messages/:id error:', error);
     res.status(500).json({ error: error.message });
@@ -259,11 +322,41 @@ router.delete('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid guild ID or config ID' });
     }
 
+    // Get the message details before deleting
+    const [rows] = await appDb.query(
+      `SELECT id, channel_id, message_id FROM embedded_messages WHERE id = ? AND guild_id = ? LIMIT 1`,
+      [id, guildId]
+    );
+    
+    const config = Array.isArray(rows) && rows[0];
+    if (!config) {
+      return res.status(404).json({ error: 'Configuration not found' });
+    }
+
+    // Try to delete the Discord message if we have the message_id
+    if (config.message_id) {
+      try {
+        const guild = await client.guilds.fetch(guildId);
+        const channel = await guild.channels.fetch(String(config.channel_id));
+        if (channel && channel.isTextBased()) {
+          const message = await channel.messages.fetch(config.message_id).catch(() => null);
+          if (message) {
+            await message.delete().catch(() => {});
+            console.log(`🗑️ Deleted Discord message ${config.message_id} from channel ${config.channel_id}`);
+          }
+        }
+      } catch (discordError) {
+        console.log(`⚠️ Failed to delete Discord message: ${discordError.message}`);
+        // Continue with database deletion even if Discord deletion fails
+      }
+    }
+
+    // Delete from database
     await deleteEmbeddedMessageConfig(guildId, id);
     
     res.json({ 
       success: true, 
-      message: 'Configuration deleted successfully' 
+      message: 'Configuration and Discord message deleted successfully' 
     });
   } catch (error) {
     console.error('DELETE /embedded-messages/:id error:', error);
@@ -285,7 +378,47 @@ router.patch('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Enabled must be a boolean' });
     }
 
+    // Get existing config to check if we need to delete message
+    const [existingRows] = await appDb.query(
+      `SELECT message_id, channel_id FROM embedded_messages WHERE id = ? AND guild_id = ? LIMIT 1`,
+      [id, guildId]
+    );
+    
+    const existingConfig = Array.isArray(existingRows) && existingRows[0];
+    
+    // If disabling and we have a message, delete it
+    if (!enabled && existingConfig && existingConfig.message_id) {
+      try {
+        const guild = await client.guilds.fetch(guildId);
+        const channel = await guild.channels.fetch(String(existingConfig.channel_id));
+        if (channel && channel.isTextBased()) {
+          const message = await channel.messages.fetch(existingConfig.message_id).catch(() => null);
+          if (message) {
+            await message.delete().catch(() => {});
+            console.log(`🗑️ Deleted Discord message ${existingConfig.message_id} when disabling`);
+          }
+        }
+      } catch (discordError) {
+        console.log(`⚠️ Failed to delete Discord message: ${discordError.message}`);
+      }
+    }
+
     await toggleEmbeddedMessageConfig(guildId, id, enabled);
+    
+    // Update message_id based on enabled status
+    if (enabled) {
+      // Clear message_id when enabling (will be set when message is actually sent)
+      await appDb.query(
+        `UPDATE embedded_messages SET message_id = NULL WHERE id = ? AND guild_id = ?`,
+        [id, guildId]
+      );
+    } else {
+      // Clear message_id when disabling
+      await appDb.query(
+        `UPDATE embedded_messages SET message_id = NULL WHERE id = ? AND guild_id = ?`,
+        [id, guildId]
+      );
+    }
     
     res.json({ 
       success: true, 
@@ -311,7 +444,47 @@ router.patch('/:id/toggle', async (req, res) => {
       return res.status(400).json({ error: 'Enabled must be a boolean' });
     }
 
+    // Get existing config to check if we need to delete message
+    const [existingRows] = await appDb.query(
+      `SELECT message_id, channel_id FROM embedded_messages WHERE id = ? AND guild_id = ? LIMIT 1`,
+      [id, guildId]
+    );
+    
+    const existingConfig = Array.isArray(existingRows) && existingRows[0];
+    
+    // If disabling and we have a message, delete it
+    if (!enabled && existingConfig && existingConfig.message_id) {
+      try {
+        const guild = await client.guilds.fetch(guildId);
+        const channel = await guild.channels.fetch(String(existingConfig.channel_id));
+        if (channel && channel.isTextBased()) {
+          const message = await channel.messages.fetch(existingConfig.message_id).catch(() => null);
+          if (message) {
+            await message.delete().catch(() => {});
+            console.log(`🗑️ Deleted Discord message ${existingConfig.message_id} when disabling (legacy toggle)`);
+          }
+        }
+      } catch (discordError) {
+        console.log(`⚠️ Failed to delete Discord message: ${discordError.message}`);
+      }
+    }
+
     await toggleEmbeddedMessageConfig(guildId, id, enabled);
+    
+    // Update message_id based on enabled status
+    if (enabled) {
+      // Clear message_id when enabling (will be set when message is actually sent)
+      await appDb.query(
+        `UPDATE embedded_messages SET message_id = NULL WHERE id = ? AND guild_id = ?`,
+        [id, guildId]
+      );
+    } else {
+      // Clear message_id when disabling
+      await appDb.query(
+        `UPDATE embedded_messages SET message_id = NULL WHERE id = ? AND guild_id = ?`,
+        [id, guildId]
+      );
+    }
     
     res.json({ 
       success: true, 

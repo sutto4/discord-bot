@@ -20,29 +20,30 @@ async function getEmbeddedMessageConfigs(guildId) {
     );
     console.log('🔍 Fetched embedded message configs:', rows.map(r => ({ id: r.id, channelId: r.channel_id, createdBy: r.created_by })));
     
-    // Transform database snake_case to frontend camelCase
-    return rows.map(row => ({
-      id: row.id,
-      channelId: row.channel_id,
-      title: row.title,
-      description: row.description,
-      color: row.color,
-      imageUrl: row.image_url,
-      thumbnailUrl: row.thumbnail_url,
-      author: row.author_name || row.author_icon_url ? {
-        name: row.author_name,
-        iconUrl: row.author_icon_url
-      } : null,
-      footer: row.footer_text || row.footer_icon_url ? {
-        text: row.footer_text,
-        iconUrl: row.footer_icon_url
-      } : null,
-      timestamp: row.timestamp,
-      enabled: row.enabled === 1,
-      createdBy: row.created_by,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at
-    }));
+         // Transform database snake_case to frontend camelCase
+     return rows.map(row => ({
+       id: row.id,
+       channelId: row.channel_id,
+       messageId: row.message_id,
+       title: row.title,
+       description: row.description,
+       color: row.color,
+       imageUrl: row.image_url,
+       thumbnailUrl: row.thumbnail_url,
+       author: row.author_name || row.author_icon_url ? {
+         name: row.author_name,
+         iconUrl: row.author_icon_url
+       } : null,
+       footer: row.footer_text || row.footer_icon_url ? {
+         text: row.footer_text,
+         iconUrl: row.footer_icon_url
+       } : null,
+       timestamp: row.timestamp,
+       enabled: row.enabled === 1,
+       createdBy: row.created_by,
+       createdAt: row.created_at,
+       updatedAt: row.updated_at
+     }));
   } catch (error) {
     console.error('Error fetching embedded message configs:', error);
     return [];

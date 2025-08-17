@@ -7,7 +7,7 @@ const client = require('../config/bot');
 // In-memory map: messageId -> { id, username }
 const createdByCache = new Map();
 
-function isId(v) { return /^[0-9]{5,20}$/.test(String(v)); }
+function isId(v) { return /^[0-9]{1,20}$/.test(String(v)); }
 
 /**
  * Fetch embedded message configurations for a guild

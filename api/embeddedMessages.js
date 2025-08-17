@@ -235,6 +235,7 @@ router.post('/', async (req, res) => {
         res.json({ 
           success: true, 
           id: configId, 
+          messageId: sentMessage.id,
           message: 'Embedded message published successfully' 
         });
       } catch (sendError) {
@@ -310,6 +311,7 @@ router.put('/:id', async (req, res) => {
         res.json({ 
           success: true, 
           id: configId, 
+          messageId: sentMessage.id,
           message: 'Configuration updated and new message published successfully' 
         });
       } catch (sendError) {

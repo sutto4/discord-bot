@@ -73,6 +73,12 @@ module.exports = function startServer(client) {
     app.use('/guilds/:guildId/reaction-roles', reactionRoles);
   } catch {}
 
+  // Mount embedded messages API (non-prefixed to match UI proxy expectations)
+  try {
+    const embeddedMessages = require('./api/embeddedMessages');
+    app.use('/guilds/:guildId/embedded-messages', embeddedMessages);
+  } catch {}
+
   // ---- Helpers ----
   function toAvatarUrl(user, size = 64) {
     try {

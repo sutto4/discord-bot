@@ -18,7 +18,31 @@ async function getEmbeddedMessageConfigs(guildId) {
       "SELECT * FROM embedded_messages WHERE guild_id = ? ORDER BY created_at DESC",
       [guildId]
     );
-    return rows;
+    console.log('🔍 Fetched embedded message configs:', rows.map(r => ({ id: r.id, channelId: r.channel_id, createdBy: r.created_by })));
+    
+    // Transform database snake_case to frontend camelCase
+    return rows.map(row => ({
+      id: row.id,
+      channelId: row.channel_id,
+      title: row.title,
+      description: row.description,
+      color: row.color,
+      imageUrl: row.image_url,
+      thumbnailUrl: row.thumbnail_url,
+      author: row.author_name || row.author_icon_url ? {
+        name: row.author_name,
+        iconUrl: row.author_icon_url
+      } : null,
+      footer: row.footer_text || row.footer_icon_url ? {
+        text: row.footer_text,
+        iconUrl: row.footer_icon_url
+      } : null,
+      timestamp: row.timestamp,
+      enabled: row.enabled === 1,
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }));
   } catch (error) {
     console.error('Error fetching embedded message configs:', error);
     return [];
@@ -58,12 +82,13 @@ async function saveEmbeddedMessageConfig(guildId, config) {
         `INSERT INTO embedded_messages (
           guild_id, channel_id, message_id, title, description, color, 
           image_url, thumbnail_url, author_name, author_icon_url, 
-          footer_text, footer_icon_url, timestamp, enabled, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+          footer_text, footer_icon_url, timestamp, enabled, created_by, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
         [
           guildId, config.channelId, config.messageId, config.title, config.description, config.color,
           config.imageUrl, config.thumbnailUrl, authorName, authorIconUrl,
-          footerText, footerIconUrl, config.timestamp, config.enabled !== false ? 1 : 0
+          footerText, footerIconUrl, config.timestamp, config.enabled !== false ? 1 : 0,
+          config.createdBy || 'ServerMate Bot'
         ]
       );
       return result.insertId;

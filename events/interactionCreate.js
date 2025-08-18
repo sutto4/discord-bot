@@ -83,10 +83,28 @@ module.exports = {
 				}
 
 				await interaction.member.roles.add(verifyRole);
+				
+				// Create enhanced verification completion message with feedback button
+				const completionEmbed = new EmbedBuilder()
+					.setTitle('✅ Verification Successful!')
+					.setDescription('Welcome to the server! You now have access to all channels.')
+					.setColor(0x00FF99)
+					.setTimestamp();
+
+				const feedbackButton = new ActionRowBuilder()
+					.addComponents(
+						new ButtonBuilder()
+							.setCustomId('open_feedback_modal')
+							.setLabel('📝 Give Feedback')
+							.setStyle(ButtonStyle.Secondary)
+					);
+
 				await interaction.reply({
-					content: '✅ You have been verified!',
+					embeds: [completionEmbed],
+					components: [feedbackButton],
 					flags: 64
 				});
+				
 				success = true;
 			} catch (err) {
 				console.error('Failed to assign verify role:', err);

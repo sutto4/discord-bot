@@ -12,6 +12,12 @@ module.exports = function startServer(client) {
 
   app.use(express.json());
 
+  // Make Discord client available to all routes
+  app.use((req, res, next) => {
+    req.client = client;
+    next();
+  });
+
   // CORS: your Next app proxies to /api, but this is safe here
   app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -77,6 +83,12 @@ module.exports = function startServer(client) {
   try {
     const embeddedMessages = require('./api/embeddedMessages');
     app.use('/guilds/:guildId/embedded-messages', embeddedMessages);
+  } catch {}
+
+  // Mount custom commands API (non-prefixed to match UI proxy expectations)
+  try {
+    const customCommands = require('./api/customCommands');
+    app.use('/guilds/:guildId/custom-commands', customCommands);
   } catch {}
 
   // ---- Helpers ----

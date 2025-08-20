@@ -37,6 +37,22 @@ class GuildDatabase {
         }
     }
 
+    // Remove guild from database
+    static async removeGuild(guildId) {
+        const query = 'DELETE FROM guilds WHERE guild_id = ?';
+        
+        try {
+            const [result] = await pool.execute(query, [guildId]);
+            if (result.affectedRows > 0) {
+                console.log(`Guild ${guildId} removed from database`);
+            } else {
+                console.log(`Guild ${guildId} was not found in database`);
+            }
+        } catch (error) {
+            console.error('Error removing guild:', error);
+        }
+    }
+
     // Get guild configuration
     static async getGuildConfig(guildId) {
         const query = 'SELECT * FROM guilds WHERE guild_id = ?';

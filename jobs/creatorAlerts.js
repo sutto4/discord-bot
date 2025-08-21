@@ -110,21 +110,17 @@ async function isTwitchUserLive(userId) {
  */
 async function assignDiscordRole(client, guildId, userId, roleId) {
     try {
-        console.log(`[CREATOR-ALERTS] DEBUG: Attempting to assign role ${roleId} to user ${userId} in guild ${guildId}`);
-        
         const guild = client.guilds.cache.get(guildId);
         if (!guild) {
             console.error(`[CREATOR-ALERTS] Guild ${guildId} not found`);
             return false;
         }
-        console.log(`[CREATOR-ALERTS] DEBUG: Found guild: ${guild.name}`);
         
         // Check if bot has MANAGE_ROLES permission
         if (!guild.members.me.permissions.has('ManageRoles')) {
             console.error(`[CREATOR-ALERTS] Bot does not have MANAGE_ROLES permission in guild ${guild.name}`);
             return false;
         }
-        console.log(`[CREATOR-ALERTS] DEBUG: Bot has MANAGE_ROLES permission`);
         
         const member = await guild.members.fetch(userId);
         if (!member) {
@@ -220,21 +216,17 @@ async function removeDiscordRole(client, guildId, userId, roleId) {
  */
 async function sendLiveNotification(client, guildId, channelId, creatorName, streamData, discordUserId = null) {
     try {
-        console.log(`[CREATOR-ALERTS] DEBUG: Attempting to send notification for ${creatorName} in guild ${guildId}, channel ${channelId}`);
-        
         const guild = client.guilds.cache.get(guildId);
         if (!guild) {
             console.error(`[CREATOR-ALERTS] Guild ${guildId} not found for notification`);
             return false;
         }
-        console.log(`[CREATOR-ALERTS] DEBUG: Found guild: ${guild.name}`);
         
         const channel = guild.channels.cache.get(channelId);
         if (!channel) {
             console.error(`[CREATOR-ALERTS] Channel ${channelId} not found in guild ${guildId}`);
             return false;
         }
-        console.log(`[CREATOR-ALERTS] DEBUG: Found channel: #${channel.name}`);
         
         // Get Twitch user's profile picture
         let twitchProfilePicUrl = null;
@@ -371,6 +363,9 @@ async function initializeCache() {
         console.log(`[CREATOR-ALERTS] Loaded ${cacheRows.length} cache entries from database`);
     } catch (error) {
         console.error('[CREATOR-ALERTS] Error initializing cache:', error);
+        // If table doesn't exist, start with empty cache
+        if (!global.creatorAlertCache) global.creatorAlertCache = {};
+        console.log('[CREATOR-ALERTS] Starting with empty cache');
     }
 }
 
@@ -400,6 +395,23 @@ async function updateCacheInDb(cacheKey, cacheData) {
         ]);
     } catch (error) {
         console.error(`[CREATOR-ALERTS] Error updating cache in database for ${cacheKey}:`, error);
+    }
+}
+
+/**
+ * Clear all cache data (useful for testing)
+ */
+async function clearAllCache() {
+    try {
+        // Clear in-memory cache
+        global.creatorAlertCache = {};
+        
+        // Clear database cache
+        await appDb.query(`DELETE FROM creator_alert_cache`);
+        
+        console.log('[CREATOR-ALERTS] All cache cleared successfully');
+    } catch (error) {
+        console.error('[CREATOR-ALERTS] Error clearing cache:', error);
     }
 }
 
@@ -461,42 +473,9 @@ async function processCreatorAlerts(client) {
                 console.log(`[CREATOR-ALERTS] Stream data for ${rule.creator}:`, streamData ? 'LIVE' : 'OFFLINE');
                 console.log(`[CREATOR-ALERTS] Last status from cache:`, lastStatus);
                 
-                // DEBUG: Force test notification every time for testing
-                if (streamData) {
-                    console.log(`[CREATOR-ALERTS] DEBUG: Forcing test notification for ${rule.creator}`);
-                    
-                    // Assign role if Discord user is mapped
-                    if (rule.discord_user_id) {
-                        try {
-                            await assignDiscordRole(client, rule.guild_id, rule.discord_user_id, rule.role_id);
-                            console.log(`[CREATOR-ALERTS] Role assigned to Discord user ${rule.discord_user_id} for ${rule.creator}`);
-                        } catch (roleError) {
-                            console.error(`[CREATOR-ALERTS] Failed to assign role for ${rule.creator}:`, roleError);
-                        }
-                    } else {
-                        console.log(`[CREATOR-ALERTS] No Discord user mapped for ${rule.creator} - skipping role assignment`);
-                    }
-                    
-                    // Send notification
-                    await sendLiveNotification(client, rule.guild_id, rule.channel_id, rule.creator, streamData, rule.discord_user_id);
-                    
-                    // Update cache
-                    if (!global.creatorAlertCache) global.creatorAlertCache = {};
-                    const cacheData = { 
-                        live: true, 
-                        timestamp: Date.now(),
-                        streamStartedAt: streamData.started_at,
-                        streamId: streamData.id,
-                        lastNotificationSent: Date.now()
-                    };
-                    global.creatorAlertCache[cacheKey] = cacheData;
-                    
-                    // Persist to database
-                    await updateCacheInDb(cacheKey, cacheData);
-                    
-                    console.log(`[CREATOR-ALERTS] DEBUG: Test notification sent for ${rule.creator}`);
-                    continue; // Skip the normal logic for now
-                }
+
+                
+
                 
                 if (streamData && !lastStatus?.live) {
                     // Creator just went live
@@ -547,10 +526,7 @@ async function processCreatorAlerts(client) {
                         console.log(`[CREATOR-ALERTS] No Discord user mapped for ${rule.creator} - skipping role removal`);
                     }
                     
-                    // Send offline notification
-                    await sendOfflineNotification(client, rule.guild_id, rule.channel_id, rule.creator);
-                    
-                    // Update cache
+                    // Update cache (no offline notification)
                     if (!global.creatorAlertCache) global.creatorAlertCache = {};
                     const cacheData = { 
                         live: false, 
@@ -563,37 +539,6 @@ async function processCreatorAlerts(client) {
                     
                     // Persist to database
                     await updateCacheInDb(cacheKey, cacheData);
-                } else if (streamData && lastStatus?.live) {
-                    // Creator is still live - check if we need to update cache
-                    const currentStreamId = streamData.id;
-                    const lastStreamId = lastStatus.streamId;
-                    
-                    // If it's a different stream (stream ended and new one started), treat it as new
-                    if (lastStreamId && currentStreamId !== lastStreamId) {
-                        console.log(`[CREATOR-ALERTS] ${rule.creator} started a new stream on Twitch in guild ${rule.guild_id} (previous stream ended)`);
-                        
-                        // Send notification for new stream
-                        await sendLiveNotification(client, rule.guild_id, rule.channel_id, rule.creator, streamData, rule.discord_user_id);
-                        
-                        // Update cache with new stream info
-                        const cacheData = { 
-                            live: true, 
-                            timestamp: Date.now(),
-                            streamStartedAt: streamData.started_at,
-                            streamId: currentStreamId,
-                            lastNotificationSent: Date.now()
-                        };
-                        global.creatorAlertCache[cacheKey] = cacheData;
-                        
-                        // Persist to database
-                        await updateCacheInDb(cacheKey, cacheData);
-                    } else {
-                        // Same stream, just update timestamp to keep it fresh
-                        global.creatorAlertCache[cacheKey].timestamp = Date.now();
-                        
-                        // Update timestamp in database
-                        await updateCacheInDb(cacheKey, global.creatorAlertCache[cacheKey]);
-                    }
                 } else {
                     console.log(`[CREATOR-ALERTS] No status change for ${rule.creator} - still ${streamData ? 'live' : 'offline'}`);
                 }
@@ -622,4 +567,4 @@ async function processCreatorAlerts(client) {
     }
 }
 
-module.exports = processCreatorAlerts;
+module.exports = { processCreatorAlerts, clearAllCache };

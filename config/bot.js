@@ -3,7 +3,7 @@ const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js'
 const fs = require('node:fs');
 const path = require('node:path');
 const syncDonators = require('../jobs/syncDonators');
-const processCreatorAlerts = require('../jobs/creatorAlerts');
+const { processCreatorAlerts } = require('../jobs/creatorAlerts');
 
 // Create Discord client with required intents
 const client = new Client({

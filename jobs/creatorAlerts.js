@@ -345,20 +345,6 @@ async function sendOfflineNotification(client, guildId, channelId, creatorName) 
  */
 async function initializeCache() {
     try {
-        // Create cache table if it doesn't exist
-        await appDb.query(`
-            CREATE TABLE IF NOT EXISTS creator_alert_cache (
-                cache_key VARCHAR(255) PRIMARY KEY,
-                live BOOLEAN NOT NULL DEFAULT FALSE,
-                timestamp BIGINT NOT NULL,
-                stream_started_at VARCHAR(255),
-                stream_id VARCHAR(255),
-                last_notification_sent BIGINT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        `);
-        
         // Load existing cache from database
         const [cacheRows] = await appDb.query(`SELECT * FROM creator_alert_cache`);
         

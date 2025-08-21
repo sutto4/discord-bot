@@ -190,17 +190,25 @@ async function sendLiveNotification(client, guildId, channelId, creatorName, str
             return false;
         }
         
-        // Get Discord user's avatar if we have their ID
-        let userAvatarUrl = null;
-        if (discordUserId) {
-            try {
-                const member = await guild.members.fetch(discordUserId);
-                if (member && member.user) {
-                    userAvatarUrl = member.user.displayAvatarURL({ size: 128, extension: 'png' });
+        // Get Twitch user's profile picture
+        let twitchProfilePicUrl = null;
+        try {
+            const token = await getTwitchToken();
+            const response = await fetch(`${TWITCH_API_BASE}/users?login=${encodeURIComponent(creatorName)}`, {
+                headers: {
+                    'Client-ID': TWITCH_CLIENT_ID,
+                    'Authorization': `Bearer ${token}`
                 }
-            } catch (error) {
-                console.log(`[CREATOR-ALERTS] Could not fetch Discord user avatar for ${discordUserId}:`, error.message);
+            });
+            
+            if (response.ok) {
+                const userData = await response.json();
+                if (userData.data && userData.data[0] && userData.data[0].profile_image_url) {
+                    twitchProfilePicUrl = userData.data[0].profile_image_url;
+                }
             }
+        } catch (error) {
+            console.log(`[CREATOR-ALERTS] Could not fetch Twitch profile picture for ${creatorName}:`, error.message);
         }
         
         // Process Twitch stream thumbnail
@@ -229,7 +237,7 @@ async function sendLiveNotification(client, guildId, channelId, creatorName, str
                 }
             ],
             thumbnail: {
-                url: userAvatarUrl || null // Discord user's profile picture
+                url: twitchProfilePicUrl || null // Twitch user's profile picture
             },
             image: {
                 url: streamThumbnailUrl || null // Twitch stream screenshot

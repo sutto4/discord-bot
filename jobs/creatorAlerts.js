@@ -416,6 +416,32 @@ async function clearAllCache() {
 }
 
 /**
+ * Clear cache for a specific guild
+ */
+async function clearGuildCache(guildId) {
+    try {
+        // Clear in-memory cache for this guild
+        if (global.creatorAlertCache) {
+            Object.keys(global.creatorAlertCache).forEach(key => {
+                if (key.startsWith(`creator_alert_${guildId}_`)) {
+                    delete global.creatorAlertCache[key];
+                }
+            });
+        }
+        
+        // Clear database cache for this guild
+        await appDb.query(
+            `DELETE FROM creator_alert_cache WHERE cache_key LIKE ?`,
+            [`creator_alert_${guildId}_%`]
+        );
+        
+        console.log(`[CREATOR-ALERTS] Cache cleared for guild ${guildId}`);
+    } catch (error) {
+        console.error(`[CREATOR-ALERTS] Error clearing cache for guild ${guildId}:`, error);
+    }
+}
+
+/**
  * Main creator alerts processing function
  */
 async function processCreatorAlerts(client) {
@@ -451,6 +477,31 @@ async function processCreatorAlerts(client) {
         
         console.log(`[CREATOR-ALERTS] Processing ${rules.length} enabled Twitch creator alert rules`);
         
+        // Clean up cache for deleted rules (remove cache entries that no longer have rules)
+        if (global.creatorAlertCache) {
+            const currentRuleIds = rules.map(r => r.id);
+            const cacheKeysToRemove = [];
+            
+            Object.keys(global.creatorAlertCache).forEach(cacheKey => {
+                // Extract guild ID from cache key
+                const parts = cacheKey.split('_');
+                if (parts.length >= 3) {
+                    const guildId = parts[2];
+                    // Check if this cache entry is for a guild we're currently processing
+                    const hasActiveRules = rules.some(r => r.guild_id === guildId);
+                    if (!hasActiveRules) {
+                        cacheKeysToRemove.push(cacheKey);
+                    }
+                }
+            });
+            
+            // Remove orphaned cache entries
+            cacheKeysToRemove.forEach(key => {
+                delete global.creatorAlertCache[key];
+                console.log(`[CREATOR-ALERTS] Removed orphaned cache entry: ${key}`);
+            });
+        }
+        
         // Process each rule
         for (const rule of rules) {
             try {
@@ -470,7 +521,7 @@ async function processCreatorAlerts(client) {
                 const cacheKey = `creator_alert_${rule.guild_id}_${twitchUserId}`;
                 const lastStatus = global.creatorAlertCache?.[cacheKey];
                 
-                console.log(`[CREATOR-ALERTS] Stream data for ${rule.creator}:`, streamData ? 'LIVE' : 'OFFLINE');
+                console.log(`[CREATOR-ALERTS] Stream data for ${rule.creator}:`, streamData ? 'LIVE' : 'OFFLINE`);
                 console.log(`[CREATOR-ALERTS] Last status from cache:`, lastStatus);
                 
 
@@ -567,4 +618,4 @@ async function processCreatorAlerts(client) {
     }
 }
 
-module.exports = { processCreatorAlerts, clearAllCache };
+module.exports = { processCreatorAlerts, clearAllCache, clearGuildCache };

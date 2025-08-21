@@ -176,7 +176,7 @@ async function removeDiscordRole(client, guildId, userId, roleId) {
 /**
  * Send Discord notification about creator going live
  */
-async function sendLiveNotification(client, guildId, channelId, creatorName, streamData) {
+async function sendLiveNotification(client, guildId, channelId, creatorName, streamData, discordUserId = null) {
     try {
         const guild = client.guilds.cache.get(guildId);
         if (!guild) {
@@ -188,6 +188,28 @@ async function sendLiveNotification(client, guildId, channelId, creatorName, str
         if (!channel) {
             console.error(`[CREATOR-ALERTS] Channel ${channelId} not found in guild ${guildId}`);
             return false;
+        }
+        
+        // Get Discord user's avatar if we have their ID
+        let userAvatarUrl = null;
+        if (discordUserId) {
+            try {
+                const member = await guild.members.fetch(discordUserId);
+                if (member && member.user) {
+                    userAvatarUrl = member.user.displayAvatarURL({ size: 128, extension: 'png' });
+                }
+            } catch (error) {
+                console.log(`[CREATOR-ALERTS] Could not fetch Discord user avatar for ${discordUserId}:`, error.message);
+            }
+        }
+        
+        // Process Twitch stream thumbnail
+        let streamThumbnailUrl = null;
+        if (streamData.thumbnail_url) {
+            // Replace placeholder dimensions with actual dimensions
+            streamThumbnailUrl = streamData.thumbnail_url
+                .replace('{width}', '1280')
+                .replace('{height}', '720');
         }
         
         const embed = {
@@ -207,7 +229,10 @@ async function sendLiveNotification(client, guildId, channelId, creatorName, str
                 }
             ],
             thumbnail: {
-                url: streamData.thumbnail_url?.replace('{width}', '320').replace('{height}', '180') || null
+                url: userAvatarUrl || null // Discord user's profile picture
+            },
+            image: {
+                url: streamThumbnailUrl || null // Twitch stream screenshot
             },
             url: `https://twitch.tv/${creatorName}`,
             timestamp: new Date().toISOString(),
@@ -224,7 +249,7 @@ async function sendLiveNotification(client, guildId, channelId, creatorName, str
         console.log(`[CREATOR-ALERTS] Sent live notification for ${creatorName} in guild ${guild.name}`);
         return true;
     } catch (error) {
-        console.error(`[CREATOR-ALERS] Error sending live notification for ${creatorName} in guild ${guildId}:`, error);
+        console.error(`[CREATOR-ALERTS] Error sending live notification for ${creatorName} in guild ${guildId}:`, error);
         return false;
     }
 }
@@ -285,6 +310,7 @@ async function processCreatorAlerts(client) {
                 car.creator,
                 car.role_id,
                 car.channel_id,
+                car.discord_user_id,
                 car.notes,
                 car.enabled
             FROM creator_alert_rules car
@@ -321,13 +347,20 @@ async function processCreatorAlerts(client) {
                     // Creator just went live
                     console.log(`[CREATOR-ALERTS] ${rule.creator} just went live on Twitch in guild ${rule.guild_id}`);
                     
-                    // Note: Role assignment requires Discord user ID mapping for Twitch username
-                    // This would need a separate table mapping Twitch usernames to Discord user IDs
-                    // For now, we'll focus on notifications
-                    console.log(`[CREATOR-ALERTS] Note: Role assignment requires Discord user ID mapping for Twitch username ${rule.creator}`);
+                    // Assign role if Discord user is mapped
+                    if (rule.discord_user_id) {
+                        try {
+                            await assignDiscordRole(client, rule.guild_id, rule.discord_user_id, rule.role_id);
+                            console.log(`[CREATOR-ALERTS] Role assigned to Discord user ${rule.discord_user_id} for ${rule.creator}`);
+                        } catch (roleError) {
+                            console.error(`[CREATOR-ALERTS] Failed to assign role for ${rule.creator}:`, roleError);
+                        }
+                    } else {
+                        console.log(`[CREATOR-ALERTS] No Discord user mapped for ${rule.creator} - skipping role assignment`);
+                    }
                     
                     // Send notification
-                    await sendLiveNotification(client, rule.guild_id, rule.channel_id, rule.creator, streamData);
+                    await sendLiveNotification(client, rule.guild_id, rule.channel_id, rule.creator, streamData, rule.discord_user_id);
                     
                     // Update cache
                     if (!global.creatorAlertCache) global.creatorAlertCache = {};
@@ -337,8 +370,17 @@ async function processCreatorAlerts(client) {
                     // Creator just went offline
                     console.log(`[CREATOR-ALERTS] ${rule.creator} just went offline on Twitch in guild ${rule.guild_id}`);
                     
-                    // Note: Role removal requires Discord user ID mapping for Twitch username
-                    console.log(`[CREATOR-ALERTS] Note: Role removal requires Discord user ID mapping for Twitch username ${rule.creator}`);
+                    // Remove role if Discord user is mapped
+                    if (rule.discord_user_id) {
+                        try {
+                            await removeDiscordRole(client, rule.guild_id, rule.discord_user_id, rule.role_id);
+                            console.log(`[CREATOR-ALERTS] Role removed from Discord user ${rule.discord_user_id} for ${rule.creator}`);
+                        } catch (roleError) {
+                            console.error(`[CREATOR-ALERTS] Failed to remove role for ${rule.creator}:`, roleError);
+                        }
+                    } else {
+                        console.log(`[CREATOR-ALERTS] No Discord user mapped for ${rule.creator} - skipping role removal`);
+                    }
                     
                     // Send offline notification
                     await sendOfflineNotification(client, rule.guild_id, rule.channel_id, rule.creator);

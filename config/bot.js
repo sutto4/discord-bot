@@ -3,6 +3,7 @@ const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js'
 const fs = require('node:fs');
 const path = require('node:path');
 const syncDonators = require('../jobs/syncDonators');
+const processCreatorAlerts = require('../jobs/creatorAlerts');
 
 // Create Discord client with required intents
 const client = new Client({
@@ -54,6 +55,12 @@ client.once('ready', async () => {
 
 	const minutes = 720; // Change this to however often you want
 	setInterval(() => syncDonators(client), minutes * 60 * 1000);
+	
+	// Creator alerts processing on startup + interval
+	await processCreatorAlerts(client); // Run once on startup
+	
+	const creatorAlertsMinutes = parseInt(process.env.CREATOR_ALERTS_POLL_SECONDS || '60') / 60; // Convert seconds to minutes
+	setInterval(() => processCreatorAlerts(client), creatorAlertsMinutes * 60 * 1000);
 });
 
 // Login using bot token from .env

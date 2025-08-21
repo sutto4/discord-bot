@@ -521,12 +521,8 @@ async function processCreatorAlerts(client) {
                 const cacheKey = `creator_alert_${rule.guild_id}_${twitchUserId}`;
                 const lastStatus = global.creatorAlertCache?.[cacheKey];
                 
-                console.log(`[CREATOR-ALERTS] Stream data for ${rule.creator}:`, streamData ? 'LIVE' : 'OFFLINE`);
+                console.log(`[CREATOR-ALERTS] Stream data for ${rule.creator}:`, streamData ? 'LIVE' : 'OFFLINE');
                 console.log(`[CREATOR-ALERTS] Last status from cache:`, lastStatus);
-                
-
-                
-
                 
                 if (streamData && !lastStatus?.live) {
                     // Creator just went live

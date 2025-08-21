@@ -250,7 +250,7 @@ async function sendLiveNotification(client, guildId, channelId, creatorName, str
         };
         
         await channel.send({
-            content: `🎉 **${creatorName}** just went live on Twitch!`,
+            content: `**${creatorName}** just went live on Twitch!`,
             embeds: [embed]
         });
         

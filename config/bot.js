@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const syncDonators = require('../jobs/syncDonators');
 const { processCreatorAlerts } = require('../jobs/creatorAlerts');
+const { applyBotCustomizationForAllGuilds } = require('../jobs/botCustomization');
 
 // Create Discord client with required intents
 const client = new Client({
@@ -61,6 +62,12 @@ client.once('ready', async () => {
 	
 	const creatorAlertsMinutes = parseInt(process.env.CREATOR_ALERTS_POLL_SECONDS || '60') / 60; // Convert seconds to minutes
 	setInterval(() => processCreatorAlerts(client), creatorAlertsMinutes * 60 * 1000);
+	
+	// Bot customization sync on startup + interval
+	await applyBotCustomizationForAllGuilds(client); // Run once on startup
+	
+	const botCustomizationMinutes = 30; // Check for bot customization updates every 30 minutes
+	setInterval(() => applyBotCustomizationForAllGuilds(client), botCustomizationMinutes * 60 * 1000);
 });
 
 // Login using bot token from .env

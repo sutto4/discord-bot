@@ -33,7 +33,7 @@ module.exports = function startServer(client) {
   // Get all guilds where the bot is installed
   app.get("/api/guilds", async (_req, res) => {
     try {
-      const [rows] = await appDb.query("SELECT guild_id, guild_name FROM guilds");
+      const [rows] = await appDb.query("SELECT guild_id, guild_name FROM guilds WHERE status = 'active' OR status IS NULL");
       
              // Get detailed guild info including member and role counts
        const guilds = await Promise.all(rows.map(async (row) => {

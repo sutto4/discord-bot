@@ -70,6 +70,9 @@ client.once('ready', async () => {
 	setInterval(() => applyBotCustomizationForAllGuilds(client), botCustomizationMinutes * 60 * 1000);
 });
 
+// Start the webhook server for immediate updates
+require('../webhook-server');
+
 // Login using bot token from .env
 client.login(process.env.TOKEN);
 

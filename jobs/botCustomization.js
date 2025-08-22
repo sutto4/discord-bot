@@ -7,20 +7,7 @@ async function applyBotCustomization(client, guildId) {
     try {
         // Get bot customization settings from database
         const [rows] = await appDb.query(
-            `SELECT 
-                bot_name, 
-                bot_avatar, 
-                embed_color, 
-                response_style, 
-                auto_responses, 
-                welcome_dm, 
-                welcome_message, 
-                goodbye_message, 
-                log_level, 
-                command_cooldown, 
-                max_response_length
-             FROM bot_customization 
-             WHERE guild_id = ?`,
+            `SELECT bot_name, bot_avatar FROM bot_customization WHERE guild_id = ?`,
             [guildId]
         );
         
@@ -122,7 +109,7 @@ async function applyBotCustomizationForAllGuilds(client) {
 async function getBotCustomization(guildId) {
     try {
         const [rows] = await appDb.query(
-            `SELECT * FROM bot_customization WHERE guild_id = ?`,
+            `SELECT bot_name, bot_avatar FROM bot_customization WHERE guild_id = ?`,
             [guildId]
         );
         
@@ -138,19 +125,7 @@ async function getBotCustomization(guildId) {
  */
 async function updateBotCustomization(guildId, settings) {
     try {
-        const {
-            bot_name,
-            bot_avatar,
-            embed_color,
-            response_style,
-            auto_responses,
-            welcome_dm,
-            welcome_message,
-            goodbye_message,
-            log_level,
-            command_cooldown,
-            max_response_length
-        } = settings;
+        const { bot_name, bot_avatar } = settings;
         
         // Check if settings exist for this guild
         const [existing] = await appDb.query(
@@ -164,54 +139,15 @@ async function updateBotCustomization(guildId, settings) {
                 `UPDATE bot_customization SET
                   bot_name = ?,
                   bot_avatar = ?,
-                  embed_color = ?,
-                  response_style = ?,
-                  auto_responses = ?,
-                  welcome_dm = ?,
-                  welcome_message = ?,
-                  goodbye_message = ?,
-                  log_level = ?,
-                  command_cooldown = ?,
-                  max_response_length = ?,
                   updated_at = CURRENT_TIMESTAMP
                  WHERE guild_id = ?`,
-                [
-                    bot_name,
-                    bot_avatar || null,
-                    embed_color || "#5865F2",
-                    response_style || "friendly",
-                    auto_responses ? 1 : 0,
-                    welcome_dm ? 1 : 0,
-                    welcome_message || "",
-                    goodbye_message || "",
-                    log_level || "normal",
-                    command_cooldown || 3,
-                    max_response_length || 2000,
-                    guildId
-                ]
+                [bot_name, bot_avatar || null, guildId]
             );
         } else {
             // Insert new settings
             await appDb.query(
-                `INSERT INTO bot_customization (
-                  guild_id, bot_name, bot_avatar, embed_color, response_style, 
-                  auto_responses, welcome_dm, welcome_message, goodbye_message, 
-                  log_level, command_cooldown, max_response_length
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    guildId,
-                    bot_name,
-                    bot_avatar || null,
-                    embed_color || "#5865F2",
-                    response_style || "friendly",
-                    auto_responses ? 1 : 0,
-                    welcome_dm ? 1 : 0,
-                    welcome_message || "",
-                    goodbye_message || "",
-                    log_level || "normal",
-                    command_cooldown || 3,
-                    max_response_length || 2000
-                ]
+                `INSERT INTO bot_customization (guild_id, bot_name, bot_avatar) VALUES (?, ?, ?)`,
+                [guildId, bot_name, bot_avatar || null]
             );
         }
         
@@ -224,9 +160,63 @@ async function updateBotCustomization(guildId, settings) {
     }
 }
 
+/**
+ * Immediate bot customization update for a specific guild
+ * Called via webhook when settings are changed in the UI
+ */
+async function immediateBotCustomizationUpdate(guildId) {
+  try {
+    console.log(`[BOT-CUSTOMIZATION] Immediate update requested for guild: ${guildId}`);
+    
+    // Get the guild
+    const guild = global.client.guilds.cache.get(guildId);
+    if (!guild) {
+      console.log(`[BOT-CUSTOMIZATION] Guild not found: ${guildId}`);
+      return false;
+    }
+    
+    // Get customization settings
+    const settings = await getBotCustomization(guildId);
+    if (!settings) {
+      console.log(`[BOT-CUSTOMIZATION] No settings found for guild: ${guildId}`);
+      return false;
+    }
+    
+    console.log(`[BOT-CUSTOMIZATION] Applying immediate update for guild: ${guildId}`);
+    
+    // Apply bot name change
+    if (settings.bot_name && settings.bot_name.trim() !== '') {
+      try {
+        await guild.members.me.setNickname(settings.bot_name.trim());
+        console.log(`[BOT-CUSTOMIZATION] Bot name updated to: ${settings.bot_name.trim()}`);
+      } catch (error) {
+        console.error(`[BOT-CUSTOMIZATION] Failed to update bot name:`, error.message);
+      }
+    }
+    
+    // Apply bot avatar change
+    if (settings.bot_avatar && settings.bot_avatar.trim() !== '') {
+      try {
+        await global.client.user.setAvatar(settings.bot_avatar.trim());
+        console.log(`[BOT-CUSTOMIZATION] Bot avatar updated`);
+      } catch (error) {
+        console.error(`[BOT-CUSTOMIZATION] Failed to update bot avatar:`, error.message);
+      }
+    }
+    
+    console.log(`[BOT-CUSTOMIZATION] Immediate update completed for guild: ${guildId}`);
+    return true;
+    
+  } catch (error) {
+    console.error(`[BOT-CUSTOMIZATION] Error during immediate update for guild ${guildId}:`, error);
+    return false;
+  }
+}
+
 module.exports = {
     applyBotCustomization,
     applyBotCustomizationForAllGuilds,
     getBotCustomization,
-    updateBotCustomization
+    updateBotCustomization,
+    immediateBotCustomizationUpdate
 };

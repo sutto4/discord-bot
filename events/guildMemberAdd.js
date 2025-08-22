@@ -1,7 +1,7 @@
 const { fivemDb } = require('../config/database');
 const { GuildDatabase } = require('../config/database-multi-guild');
 const { donatorRoleMapping } = require('../config/roles');
-const applyDonatorRole = require('../helpers/applyDonatorRole');
+const { applyDonatorRole } = require('../helpers/applyDonatorRole');
 
 module.exports = {
 	name: 'guildMemberAdd',

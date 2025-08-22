@@ -2,7 +2,7 @@ const express = require('express');
 const { immediateBotCustomizationUpdate } = require('./jobs/botCustomization');
 
 const app = express();
-const PORT = process.env.BOT_WEBHOOK_PORT || 3001;
+const PORT = process.env.BOT_WEBHOOK_PORT || 3002;
 
 // Middleware
 app.use(express.json());

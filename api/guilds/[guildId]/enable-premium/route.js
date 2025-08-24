@@ -35,6 +35,11 @@ router.post('/enable-premium', verifyBotApiKey, async (req, res) => {
       action
     });
     
+    // Debug: Check what guilds are available
+    console.log('Available guilds in cache:', Array.from(req.client.guilds.cache.keys()));
+    console.log('Looking for guild ID:', guildId);
+    console.log('Guild found:', req.client.guilds.cache.has(guildId));
+    
     // Get the guild from the bot's cache
     const guild = req.client.guilds.cache.get(guildId);
     

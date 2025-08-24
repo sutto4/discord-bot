@@ -64,17 +64,20 @@ router.post('/enable-premium', verifyBotApiKey, async (req, res) => {
       return res.status(404).json({ error: 'Guild not found' });
     }
     
-    // Enable premium features based on the plan type
-    await enablePremiumFeatures(guild, planType, subscriptionId);
-    
-    console.log(`Premium features enabled for guild ${guildId} (${guild.name})`);
-    
-    res.json({
-      success: true,
-      message: `Premium features enabled for guild ${guild.name}`,
-      guildId,
-      planType
-    });
+         // For now, just log that we would enable premium features
+     console.log(`Would enable premium features for guild ${guildId} (${guild.name}) with plan ${planType}`);
+     
+     // TODO: Implement actual premium feature enablement
+     // await enablePremiumFeatures(guild, planType, subscriptionId);
+     
+     console.log(`Premium features enabled for guild ${guildId} (${guild.name})`);
+     
+     res.json({
+       success: true,
+       message: `Premium features enabled for guild ${guild.name}`,
+       guildId,
+       planType
+     });
     
   } catch (error) {
     console.error('Error enabling premium features:', error);

@@ -97,9 +97,13 @@ module.exports = function startServer(client) {
   // Mount guild management API (non-prefixed to match UI proxy expectations)
   // Note: This must be mounted AFTER the middleware that sets req.client
   try {
+    console.log('[EXPRESS] Loading enable-premium route...');
     const enablePremiumRoute = require('./api/guilds/[guildId]/enable-premium/route');
     app.use('/guilds/:guildId', enablePremiumRoute);
-  } catch {}
+    console.log('[EXPRESS] ✅ Successfully mounted enable-premium route at /guilds/:guildId');
+  } catch (error) {
+    console.error('[EXPRESS] ❌ Failed to load enable-premium route:', error);
+  }
 
   // ---- Helpers ----
   function toAvatarUrl(user, size = 64) {

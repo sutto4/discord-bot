@@ -60,7 +60,7 @@ router.post('/enable-premium', verifyBotApiKey, async (req, res) => {
     }
     
          // Update the guild's premium status in the database
-     await GuildDatabase.updateGuildPremiumStatus(guild.id, true, planType, subscriptionId);
+     await updateGuildPremiumStatus(guild.id, true, planType, subscriptionId);
      
      // Enable all premium features in guild_features table (same as new subscription processing)
      await enablePremiumFeatures(guild.id);
@@ -88,12 +88,12 @@ async function enablePremiumFeatures(guildId) {
   try {
     console.log(`🔧 Enabling premium features for guild ${guildId}...`);
     
-    // Get all premium features from the features table
-    const [premiumFeatures] = await GuildDatabase.pool.execute(`
-      SELECT feature_key, feature_name 
-      FROM features 
-      WHERE minimum_package = 'premium' AND is_active = 1
-    `);
+         // Get all premium features from the features table
+     const [premiumFeatures] = await appDb.execute(`
+       SELECT feature_key, feature_name 
+       FROM features 
+       WHERE minimum_package = 'premium' AND is_active = 1
+     `);
     
     console.log(`Found ${premiumFeatures.length} premium features to enable:`, premiumFeatures);
     
@@ -102,21 +102,21 @@ async function enablePremiumFeatures(guildId) {
       return;
     }
     
-    // Create guild_features table if it doesn't exist
-    await GuildDatabase.pool.execute(`
-      CREATE TABLE IF NOT EXISTS guild_features (
-        id int(11) NOT NULL AUTO_INCREMENT,
-        guild_id varchar(255) NOT NULL,
-        feature_name varchar(255) NOT NULL,
-        enabled tinyint(1) NOT NULL DEFAULT 0,
-        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        PRIMARY KEY (id),
-        UNIQUE KEY guild_feature (guild_id, feature_name),
-        KEY guild_id (guild_id),
-        KEY feature_name (feature_name)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
+         // Create guild_features table if it doesn't exist
+     await appDb.execute(`
+       CREATE TABLE IF NOT EXISTS guild_features (
+         id int(11) NOT NULL AUTO_INCREMENT,
+         guild_id varchar(255) NOT NULL,
+         feature_name varchar(255) NOT NULL,
+         enabled tinyint(1) NOT NULL DEFAULT 0,
+         created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+         updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+         PRIMARY KEY (id),
+         UNIQUE KEY guild_feature (guild_id, feature_name),
+         KEY guild_id (guild_id),
+         KEY feature_name (feature_name)
+       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+     `);
     
     // Enable each premium feature
     for (const feature of premiumFeatures) {

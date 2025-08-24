@@ -88,8 +88,8 @@ router.post('/enable-premium', verifyBotApiKey, async (req, res) => {
 // Function to enable premium features for a guild
 async function enablePremiumFeatures(guild, planType, subscriptionId) {
   try {
-    // Update guild status in database if needed
-    const { GuildDatabase } = require('../../config/database-multi-guild');
+         // Update guild status in database if needed
+     const { GuildDatabase } = require('../../../config/database-multi-guild');
     await GuildDatabase.updateGuildPremiumStatus(guild.id, true, planType, subscriptionId);
     
     // Enable specific features based on plan type

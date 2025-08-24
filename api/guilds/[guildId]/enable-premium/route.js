@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 
 // Import the actual database function
-const { GuildDatabase } = require('../../config/database-multi-guild');
+const { GuildDatabase } = require('../../../config/database-multi-guild');
 
 // Middleware to verify bot API key
 const verifyBotApiKey = (req, res, next) => {

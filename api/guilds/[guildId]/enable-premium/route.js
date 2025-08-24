@@ -129,21 +129,8 @@ async function enablePremiumFeatures(guildId) {
       return;
     }
     
-         // Create guild_features table if it doesn't exist
-     await appDb.execute(`
-       CREATE TABLE IF NOT EXISTS guild_features (
-         id int(11) NOT NULL AUTO_INCREMENT,
-         guild_id varchar(255) NOT NULL,
-         feature_name varchar(255) NOT NULL,
-         enabled tinyint(1) NOT NULL DEFAULT 0,
-         created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-         updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-         PRIMARY KEY (id),
-         UNIQUE KEY guild_feature (guild_id, feature_name),
-         KEY guild_id (guild_id),
-         KEY feature_name (feature_name)
-       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-     `);
+         // Note: guild_features table should already exist from core schema
+     console.log(`📋 Using existing guild_features table for guild ${guildId}`);
     
     // Enable each premium feature
     for (const feature of premiumFeatures) {

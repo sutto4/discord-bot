@@ -97,8 +97,8 @@ module.exports = function startServer(client) {
   // Mount guild management API (non-prefixed to match UI proxy expectations)
   // Note: This must be mounted AFTER the middleware that sets req.client
   try {
-    const guildRoutes = require('./api/guilds');
-    app.use('/guilds', guildRoutes);
+    const enablePremiumRoute = require('./api/guilds/[guildId]/enable-premium/route');
+    app.use('/guilds/:guildId', enablePremiumRoute);
   } catch {}
 
   // ---- Helpers ----

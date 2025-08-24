@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 
 // Import the working database connection
-const { appDb } = require('../../../config/database');
+const { appDb } = require('../../../../config/database');
 console.log('[ROUTE] Successfully imported appDb:', typeof appDb);
 
 // Middleware to verify bot API key

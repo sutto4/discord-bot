@@ -36,7 +36,7 @@ router.post('/enable-premium', verifyBotApiKey, async (req, res) => {
     });
     
     // Get the guild from the bot's cache
-    const guild = req.app.get('client').guilds.cache.get(guildId);
+    const guild = req.client.guilds.cache.get(guildId);
     
     if (!guild) {
       console.log(`Guild ${guildId} not found in bot cache`);

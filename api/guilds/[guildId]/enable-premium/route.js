@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 
+// Import the actual database function
+const { GuildDatabase } = require('../../../config/database-multi-guild');
+
 // Middleware to verify bot API key
 const verifyBotApiKey = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -55,11 +58,11 @@ router.post('/enable-premium', verifyBotApiKey, async (req, res) => {
       return res.status(404).json({ error: 'Guild not found' });
     }
     
-         // For now, just log that premium features would be enabled
-     console.log(`Would enable premium features for guild ${guildId} (${guild.name}) with plan ${planType}`);
+         // Update the guild's premium status in the database
+     await GuildDatabase.updateGuildPremiumStatus(guild.id, true, planType, subscriptionId);
      
-     // TODO: Implement actual premium feature enablement when database module is available
-     // await enablePremiumFeatures(guild, planType, subscriptionId);
+     // Enable all premium features in guild_features table (same as new subscription processing)
+     await enablePremiumFeatures(guild.id);
      
      console.log(`Premium features enabled for guild ${guildId} (${guild.name})`);
      
@@ -79,131 +82,61 @@ router.post('/enable-premium', verifyBotApiKey, async (req, res) => {
   }
 });
 
-// Function to enable premium features for a guild
-async function enablePremiumFeatures(guild, planType, subscriptionId) {
+// Function to enable premium features in guild_features table (same as new subscription processing)
+async function enablePremiumFeatures(guildId) {
   try {
-         // Update guild status in database if needed
-     const { GuildDatabase } = require('../../config/database-multi-guild');
-    await GuildDatabase.updateGuildPremiumStatus(guild.id, true, planType, subscriptionId);
+    console.log(`🔧 Enabling premium features for guild ${guildId}...`);
     
-    // Enable specific features based on plan type
-    switch (planType?.toLowerCase()) {
-      case 'solo':
-        await enableSoloFeatures(guild);
-        break;
-      case 'squad':
-        await enableSquadFeatures(guild);
-        break;
-      case 'city':
-        await enableCityFeatures(guild);
-        break;
-      case 'enterprise':
-        await enableEnterpriseFeatures(guild);
-        break;
-      default:
-        await enableBasicPremiumFeatures(guild);
+    // Get all premium features from the features table
+    const [premiumFeatures] = await GuildDatabase.pool.execute(`
+      SELECT feature_key, feature_name 
+      FROM features 
+      WHERE minimum_package = 'premium' AND is_active = 1
+    `);
+    
+    console.log(`Found ${premiumFeatures.length} premium features to enable:`, premiumFeatures);
+    
+    if (!Array.isArray(premiumFeatures) || premiumFeatures.length === 0) {
+      console.log('No premium features found to enable');
+      return;
     }
     
-    console.log(`Premium features enabled for guild ${guild.name} (${guild.id})`);
+    // Create guild_features table if it doesn't exist
+    await GuildDatabase.pool.execute(`
+      CREATE TABLE IF NOT EXISTS guild_features (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        guild_id varchar(255) NOT NULL,
+        feature_name varchar(255) NOT NULL,
+        enabled tinyint(1) NOT NULL DEFAULT 0,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY guild_feature (guild_id, feature_name),
+        KEY guild_id (guild_id),
+        KEY feature_name (feature_name)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    
+    // Enable each premium feature
+    for (const feature of premiumFeatures) {
+      const featureName = feature.feature_key || feature.feature_name;
+      console.log(`Enabling feature: ${featureName} for guild ${guildId}`);
+      
+      await GuildDatabase.pool.execute(`
+        INSERT INTO guild_features (guild_id, feature_name, enabled) 
+        VALUES (?, ?, 1) 
+        ON DUPLICATE KEY UPDATE enabled = 1, updated_at = CURRENT_TIMESTAMP
+      `, [guildId, featureName]);
+    }
+    
+    console.log(`✅ Successfully enabled ${premiumFeatures.length} premium features for guild ${guildId}`);
     
   } catch (error) {
-    console.error(`Failed to enable premium features for guild ${guild.id}:`, error);
+    console.error(`❌ Failed to enable premium features for guild ${guildId}:`, error);
     throw error;
   }
 }
 
-// Enable basic premium features (available to all premium plans)
-async function enableBasicPremiumFeatures(guild) {
-  // Enable custom commands
-  await enableCustomCommands(guild);
-  
-  // Enable advanced role management
-  await enableAdvancedRoleManagement(guild);
-  
-  // Enable premium logging
-  await enablePremiumLogging(guild);
-}
-
-// Enable Solo plan features
-async function enableSoloFeatures(guild) {
-  await enableBasicPremiumFeatures(guild);
-  // Solo-specific features
-  await enableBasicAnalytics(guild);
-}
-
-// Enable Squad plan features
-async function enableSquadFeatures(guild) {
-  await enableSoloFeatures(guild);
-  // Squad-specific features
-  await enableServerGroups(guild);
-  await enableAdvancedAnalytics(guild);
-}
-
-// Enable City plan features
-async function enableCityFeatures(guild) {
-  await enableSquadFeatures(guild);
-  // City-specific features
-  await enableCustomIntegrations(guild);
-  await enablePrioritySupport(guild);
-}
-
-// Enable Enterprise plan features
-async function enableEnterpriseFeatures(guild) {
-  await enableCityFeatures(guild);
-  // Enterprise-specific features
-  await enableWhiteLabeling(guild);
-  await enableDedicatedSupport(guild);
-}
-
-// Feature enablement functions
-async function enableCustomCommands(guild) {
-  console.log(`Enabling custom commands for guild ${guild.name}`);
-  // Implementation for enabling custom commands
-}
-
-async function enableAdvancedRoleManagement(guild) {
-  console.log(`Enabling advanced role management for guild ${guild.name}`);
-  // Implementation for enabling advanced role management
-}
-
-async function enablePremiumLogging(guild) {
-  console.log(`Enabling premium logging for guild ${guild.name}`);
-  // Implementation for enabling premium logging
-}
-
-async function enableBasicAnalytics(guild) {
-  console.log(`Enabling basic analytics for guild ${guild.name}`);
-  // Implementation for enabling basic analytics
-}
-
-async function enableServerGroups(guild) {
-  console.log(`Enabling server groups for guild ${guild.name}`);
-  // Implementation for enabling server groups
-}
-
-async function enableAdvancedAnalytics(guild) {
-  console.log(`Enabling advanced analytics for guild ${guild.name}`);
-  // Implementation for enabling advanced analytics
-}
-
-async function enableCustomIntegrations(guild) {
-  console.log(`Enabling custom integrations for guild ${guild.name}`);
-  // Implementation for enabling custom integrations
-}
-
-async function enablePrioritySupport(guild) {
-  console.log(`Enabling priority support for guild ${guild.name}`);
-  // Implementation for enabling priority support
-}
-
-async function enableWhiteLabeling(guild) {
-  console.log(`Enabling white labeling for guild ${guild.name}`);
-  // Implementation for enabling white labeling
-}
-
-async function enableDedicatedSupport(guild) {
-  console.log(`Enabling dedicated support for guild ${guild.name}`);
-  // Implementation for enabling dedicated support
-}
+     
 
 module.exports = router;

@@ -83,6 +83,37 @@ router.post('/enable-premium', verifyBotApiKey, async (req, res) => {
   }
 });
 
+// Function to update guild premium status in database
+async function updateGuildPremiumStatus(guildId, isPremium, planType, subscriptionId) {
+  try {
+    console.log(`🗄️ Updating guild ${guildId} premium status: ${isPremium ? 'enabled' : 'disabled'} (${planType})`);
+    
+    // Update the guild's premium status
+    await appDb.execute(`
+      UPDATE guilds 
+      SET is_premium = ?, 
+          premium_plan = ?, 
+          subscription_id = ?,
+          premium_updated_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE guild_id = ?
+    `, [isPremium ? 1 : 0, planType, subscriptionId, guildId]);
+    
+    // Log the premium status change
+    await appDb.execute(`
+      INSERT INTO guild_premium_logs 
+      (guild_id, action, plan_type, subscription_id, timestamp) 
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `, [guildId, 'premium_enabled', planType, subscriptionId]);
+    
+    console.log(`✅ Guild ${guildId} premium status updated successfully`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Database update failed for guild ${guildId}:`, error);
+    throw error;
+  }
+}
+
 // Function to enable premium features in guild_features table (same as new subscription processing)
 async function enablePremiumFeatures(guildId) {
   try {
@@ -123,11 +154,11 @@ async function enablePremiumFeatures(guildId) {
       const featureName = feature.feature_key || feature.feature_name;
       console.log(`Enabling feature: ${featureName} for guild ${guildId}`);
       
-      await GuildDatabase.pool.execute(`
-        INSERT INTO guild_features (guild_id, feature_name, enabled) 
-        VALUES (?, ?, 1) 
-        ON DUPLICATE KEY UPDATE enabled = 1, updated_at = CURRENT_TIMESTAMP
-      `, [guildId, featureName]);
+             await appDb.execute(`
+         INSERT INTO guild_features (guild_id, feature_name, enabled) 
+         VALUES (?, ?, 1) 
+         ON DUPLICATE KEY UPDATE enabled = 1, updated_at = CURRENT_TIMESTAMP
+       `, [guildId, featureName]);
     }
     
     console.log(`✅ Successfully enabled ${premiumFeatures.length} premium features for guild ${guildId}`);

@@ -283,7 +283,7 @@ async function sendLiveNotification(client, guildId, channelId, creatorName, str
             url: `https://twitch.tv/${creatorName}`,
             timestamp: new Date().toISOString(),
             footer: {
-                text: 'Creator Alerts • ServerHub'
+                text: 'Creator Alerts • ServerMate'
             }
         };
         
@@ -323,7 +323,7 @@ async function sendOfflineNotification(client, guildId, channelId, creatorName) 
             description: 'The stream has ended.',
             timestamp: new Date().toISOString(),
             footer: {
-                text: 'Creator Alerts • ServerHub'
+                text: 'Creator Alerts • ServerMate'
             }
         };
         

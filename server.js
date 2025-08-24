@@ -91,6 +91,12 @@ module.exports = function startServer(client) {
     app.use('/guilds/:guildId/custom-commands', customCommands);
   } catch {}
 
+  // Mount guild management API (non-prefixed to match UI proxy expectations)
+  try {
+    const guildRoutes = require('./api/guilds');
+    app.use('/guilds', guildRoutes);
+  } catch {}
+
   // ---- Helpers ----
   function toAvatarUrl(user, size = 64) {
     try {

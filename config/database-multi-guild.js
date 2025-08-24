@@ -22,16 +22,17 @@ class GuildDatabase {
     // Initialize guild in database
     static async initializeGuild(guildId, guildName) {
         const query = `
-            INSERT INTO guilds (guild_id, guild_name) 
-            VALUES (?, ?) 
+            INSERT INTO guilds (guild_id, guild_name, status) 
+            VALUES (?, ?, 'active') 
             ON DUPLICATE KEY UPDATE 
                 guild_name = VALUES(guild_name),
+                status = 'active',
                 updated_at = CURRENT_TIMESTAMP
         `;
         
         try {
             await pool.execute(query, [guildId, guildName]);
-            console.log(`Guild ${guildName} (${guildId}) initialized in database`);
+            console.log(`Guild ${guildName} (${guildId}) initialized in database with active status`);
         } catch (error) {
             console.error('Error initializing guild:', error);
         }
@@ -391,6 +392,39 @@ class GuildDatabase {
             await pool.execute(query, [source, guildsProcessed, success, errorMessage]);
         } catch (error) {
             console.error('Error logging sync attempt:', error);
+        }
+    }
+
+    // Update guild premium status
+    static async updateGuildPremiumStatus(guildId, isPremium, planType, subscriptionId) {
+        try {
+            // Update the guild's premium status
+            const updateQuery = `
+                UPDATE guilds 
+                SET is_premium = ?, 
+                    premium_plan = ?, 
+                    subscription_id = ?,
+                    premium_updated_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE guild_id = ?
+            `;
+            
+            await pool.execute(updateQuery, [isPremium ? 1 : 0, planType, subscriptionId, guildId]);
+            
+            // Log the premium status change
+            const logQuery = `
+                INSERT INTO guild_premium_logs 
+                (guild_id, action, plan_type, subscription_id, timestamp) 
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            `;
+            
+            await pool.execute(logQuery, [guildId, 'premium_enabled', planType, subscriptionId]);
+            
+            console.log(`Guild ${guildId} premium status updated: ${isPremium ? 'enabled' : 'disabled'} (${planType})`);
+            return true;
+        } catch (error) {
+            console.error('Error updating guild premium status:', error);
+            return false;
         }
     }
 }

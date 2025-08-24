@@ -29,13 +29,7 @@ router.post('/enable-premium', verifyBotApiKey, async (req, res) => {
     const { guildId } = req.params;
     const { subscriptionId, planType, action } = req.body;
     
-    // Debug: Check all parameters
-    console.log('=== DEBUG INFO ===');
-    console.log('req.params:', req.params);
-    console.log('req.originalUrl:', req.originalUrl);
-    console.log('req.url:', req.url);
-    console.log('guildId from params:', guildId);
-    console.log('==================');
+    
     
     console.log(`Enabling premium features for guild ${guildId}`, {
       subscriptionId,
@@ -51,10 +45,7 @@ router.post('/enable-premium', verifyBotApiKey, async (req, res) => {
       return res.status(500).json({ error: 'Discord client not available' });
     }
     
-    // Debug: Check what guilds are available
-    console.log('Available guilds in cache:', Array.from(client.guilds.cache.keys()));
-    console.log('Looking for guild ID:', guildId);
-    console.log('Guild found:', client.guilds.cache.has(guildId));
+    
     
     // Get the guild from the bot's cache
     const guild = client.guilds.cache.get(guildId);

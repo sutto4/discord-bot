@@ -24,7 +24,7 @@ const verifyBotApiKey = (req, res, next) => {
 };
 
 // POST /guilds/:guildId/enable-premium
-router.post('/enable-premium', verifyBotApiKey, async (req, res) => {
+router.post('/:guildId/enable-premium', verifyBotApiKey, async (req, res) => {
   try {
     const { guildId } = req.params;
     const { subscriptionId, planType, action } = req.body;

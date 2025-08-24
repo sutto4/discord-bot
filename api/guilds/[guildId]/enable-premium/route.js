@@ -29,6 +29,14 @@ router.post('/enable-premium', verifyBotApiKey, async (req, res) => {
     const { guildId } = req.params;
     const { subscriptionId, planType, action } = req.body;
     
+    // Debug: Check all parameters
+    console.log('=== DEBUG INFO ===');
+    console.log('req.params:', req.params);
+    console.log('req.originalUrl:', req.originalUrl);
+    console.log('req.url:', req.url);
+    console.log('guildId from params:', guildId);
+    console.log('==================');
+    
     console.log(`Enabling premium features for guild ${guildId}`, {
       subscriptionId,
       planType,

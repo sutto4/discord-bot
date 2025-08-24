@@ -88,23 +88,17 @@ async function updateGuildPremiumStatus(guildId, isPremium, planType, subscripti
   try {
     console.log(`🗄️ Updating guild ${guildId} premium status: ${isPremium ? 'enabled' : 'disabled'} (${planType})`);
     
-    // Update the guild's premium status
-    await appDb.execute(`
-      UPDATE guilds 
-      SET is_premium = ?, 
-          premium_plan = ?, 
-          subscription_id = ?,
-          premium_updated_at = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE guild_id = ?
-    `, [isPremium ? 1 : 0, planType, subscriptionId, guildId]);
+         // Update the guild's premium status
+     await appDb.execute(`
+       UPDATE guilds 
+       SET premium = ?, 
+           stripe_subscription_id = ?,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE guild_id = ?
+     `, [isPremium ? 1 : 0, subscriptionId, guildId]);
     
-    // Log the premium status change
-    await appDb.execute(`
-      INSERT INTO guild_premium_logs 
-      (guild_id, action, plan_type, subscription_id, timestamp) 
-      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `, [guildId, 'premium_enabled', planType, subscriptionId]);
+         // Note: guild_premium_logs table doesn't exist in current schema
+     console.log(`📝 Would log premium status change for guild ${guildId} (table not implemented yet)`);
     
     console.log(`✅ Guild ${guildId} premium status updated successfully`);
     return true;

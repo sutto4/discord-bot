@@ -35,13 +35,21 @@ router.post('/enable-premium', verifyBotApiKey, async (req, res) => {
       action
     });
     
+    // Get the Discord client from the Express app
+    const client = req.app.get('client') || req.client;
+    
+    if (!client) {
+      console.error('Discord client not available');
+      return res.status(500).json({ error: 'Discord client not available' });
+    }
+    
     // Debug: Check what guilds are available
-    console.log('Available guilds in cache:', Array.from(req.client.guilds.cache.keys()));
+    console.log('Available guilds in cache:', Array.from(client.guilds.cache.keys()));
     console.log('Looking for guild ID:', guildId);
-    console.log('Guild found:', req.client.guilds.cache.has(guildId));
+    console.log('Guild found:', client.guilds.cache.has(guildId));
     
     // Get the guild from the bot's cache
-    const guild = req.client.guilds.cache.get(guildId);
+    const guild = client.guilds.cache.get(guildId);
     
     if (!guild) {
       console.log(`Guild ${guildId} not found in bot cache`);

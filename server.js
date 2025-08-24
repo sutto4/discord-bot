@@ -17,6 +17,9 @@ module.exports = function startServer(client) {
     req.client = client;
     next();
   });
+  
+  // Also store client in app for routes that need it
+  app.set('client', client);
 
   // CORS: your Next app proxies to /api, but this is safe here
   app.use((req, res, next) => {
@@ -92,6 +95,7 @@ module.exports = function startServer(client) {
   } catch {}
 
   // Mount guild management API (non-prefixed to match UI proxy expectations)
+  // Note: This must be mounted AFTER the middleware that sets req.client
   try {
     const guildRoutes = require('./api/guilds');
     app.use('/guilds', guildRoutes);

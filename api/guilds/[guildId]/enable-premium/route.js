@@ -92,10 +92,12 @@ async function updateGuildPremiumStatus(guildId, isPremium, planType, subscripti
      await appDb.execute(`
        UPDATE guilds 
        SET premium = ?, 
-           stripe_subscription_id = ?,
+           subscription_id = ?,
+           product_name = ?,
+           subscription_status = 'active',
            updated_at = CURRENT_TIMESTAMP
        WHERE guild_id = ?
-     `, [isPremium ? 1 : 0, subscriptionId, guildId]);
+     `, [isPremium ? 1 : 0, subscriptionId, planType, guildId]);
     
          // Note: guild_premium_logs table doesn't exist in current schema
      console.log(`📝 Would log premium status change for guild ${guildId} (table not implemented yet)`);

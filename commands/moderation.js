@@ -84,10 +84,22 @@ async function showStatus(interaction) {
 			.setDescription(`**Guild:** ${interaction.guild.name}`)
 			.addFields(
 				{ name: 'System Status', value: status.enabled ? '🟢 Enabled' : '🔴 Disabled', inline: true },
-				{ name: 'Log Channel', value: status.logChannel ? `<#${status.logChannel}>` : 'Not set', inline: true },
 				{ name: 'Ban Sync', value: status.banSync ? '🟢 Enabled' : '🔴 Disabled', inline: true }
 			)
 			.setTimestamp();
+			
+		// Add log channel information
+		if (status.modLogChannel) {
+			embed.addFields({ name: '📝 Moderation Log Channel', value: `<#${status.modLogChannel}>`, inline: false });
+		}
+		
+		if (status.verifyLogChannel) {
+			embed.addFields({ name: '📋 General Log Channel', value: `<#${status.verifyLogChannel}>`, inline: false });
+		}
+		
+		if (!status.modLogChannel && !status.verifyLogChannel) {
+			embed.addFields({ name: '⚠️ Log Channels', value: 'No log channels configured. Use `/setmodlog` or `/setverifylog` to set one.', inline: false });
+		}
 
 		await interaction.editReply({ embeds: [embed] });
 	} catch (error) {
@@ -128,12 +140,40 @@ async function resetCommands(interaction) {
 
 // Helper functions - these will be implemented with database integration
 async function getModerationStatus(guildId) {
-	// TODO: Implement database query
-	return {
-		enabled: true,
-		logChannel: null,
-		banSync: false
-	};
+	try {
+		// Get moderation log channel
+		const modLogPath = path.join(__dirname, '../data/moderation_log_channels.json');
+		let modLogChannel = null;
+		if (require('fs').existsSync(modLogPath)) {
+			try {
+				const modLogData = JSON.parse(require('fs').readFileSync(modLogPath, 'utf8'));
+				modLogChannel = modLogData[guildId] || null;
+			} catch (err) {
+				// Ignore errors reading mod log config
+			}
+		}
+		
+		// Get general verify log channel as fallback
+		const { getLogChannelId } = require('../utils/guildConfig');
+		const verifyLogChannel = await getLogChannelId(guildId);
+		
+		return {
+			enabled: true,
+			logChannel: modLogChannel || verifyLogChannel,
+			modLogChannel: modLogChannel,
+			verifyLogChannel: verifyLogChannel,
+			banSync: false
+		};
+	} catch (error) {
+		console.error('Error getting moderation status:', error);
+		return {
+			enabled: true,
+			logChannel: null,
+			modLogChannel: null,
+			verifyLogChannel: null,
+			banSync: false
+		};
+	}
 }
 
 async function setCommandStatus(guildId, command, enabled) {

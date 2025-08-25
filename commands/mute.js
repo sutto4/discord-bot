@@ -56,8 +56,19 @@ module.exports = {
 			// Create case ID
 			const caseId = await generateCaseId(interaction.guildId);
 
-			// Log to database
-			await logModerationAction({
+			// Log to Discord channel and database
+			const { logModerationAction: logToChannel } = require('../utils/moderation');
+			await logToChannel(
+				interaction.guild,
+				'mute',
+				interaction.user,
+				member,
+				reason,
+				parsed.label
+			);
+			
+			// TODO: Database logging will be added later
+			console.log('Moderation action logged:', {
 				guildId: interaction.guildId,
 				caseId,
 				actionType: 'mute',

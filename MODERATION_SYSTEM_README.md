@@ -79,6 +79,32 @@ Audit trail of all moderation-related actions.
    VALUES ('your_guild_id', 'moderation', 1);
    ```
 
+### 📝 Setting Up Logging
+
+#### Discord Channel Logging (Base Feature)
+1. **Set Moderation Log Channel** (Recommended):
+   ```
+   /setmodlog #moderation-logs
+   ```
+   This sets a dedicated channel for moderation actions.
+
+2. **Set General Log Channel** (Alternative):
+   ```
+   /setverifylog #general-logs
+   ```
+   This sets a channel for verification and moderation logs.
+
+3. **Check Status**:
+   ```
+   /moderation status
+   ```
+   Shows current log channel configuration.
+
+#### Priority System
+- **Moderation Log Channel** (set with `/setmodlog`) - Takes priority for moderation actions
+- **General Log Channel** (set with `/setverifylog`) - Fallback if no moderation log channel is set
+- If neither is set, no logging occurs
+
 ### Deploy Commands
 
 #### Feature-Aware Deployment (Recommended)

@@ -25,7 +25,8 @@ const moderationCommands = [
 	'kick.js',
 	'warn.js',
 	'case.js',
-	'moderation.js'
+	'moderation.js',
+	'setmodlog.js'
 ];
 
 for (const file of moderationCommands) {

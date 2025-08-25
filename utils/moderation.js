@@ -23,9 +23,28 @@ function sanitize(text, fallback = 'N/A') {
 
 async function logModerationAction(guild, action, moderatorUser, targetMember, reason, durationLabel) {
 	try {
-		const { getLogChannelId } = require('./guildConfig');
-		const logChannelId = await getLogChannelId(guild.id);
+		// First try to get moderation-specific log channel
+		let logChannelId = null;
+		
+		// Check for moderation log channel first
+		const modLogPath = path.join(__dirname, '../data/moderation_log_channels.json');
+		if (require('fs').existsSync(modLogPath)) {
+			try {
+				const modLogData = JSON.parse(require('fs').readFileSync(modLogPath, 'utf8'));
+				logChannelId = modLogData[guild.id] || null;
+			} catch (err) {
+				// Ignore errors reading mod log config
+			}
+		}
+		
+		// Fall back to general verify log channel if no moderation log channel is set
+		if (!logChannelId) {
+			const { getLogChannelId } = require('./guildConfig');
+			logChannelId = await getLogChannelId(guild.id);
+		}
+		
 		if (!logChannelId) return;
+		
 		const logChannel = guild.channels.cache.get(logChannelId) ||
 			await guild.channels.fetch(logChannelId).catch(() => null);
 		if (!logChannel) return;
@@ -62,6 +81,8 @@ function getActionColor(action) {
 		case 'warn': return 0xFFFF00;
 		case 'mute': return 0x808080;
 		case 'ban': return 0xFF0000;
+		case 'unban': return 0x00FF00;
+		case 'unmute': return 0x0000FF;
 		default: return 0x2F3136;
 	}
 }

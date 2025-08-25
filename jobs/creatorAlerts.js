@@ -146,11 +146,31 @@ async function getTwitchToken() {
     }
 }
 
+// Twitch user ID cache to prevent repeated API calls
+const twitchUserIdCache = new Map();
+const TWITCH_USER_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
 /**
- * Get Twitch user ID from username
+ * Get Twitch user ID from username - OPTIMIZED VERSION
+ * Uses caching to prevent repeated API calls
  */
 async function getTwitchUserId(username) {
     try {
+        // Check cache first
+        const cacheKey = username.toLowerCase();
+        const cached = twitchUserIdCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp) < TWITCH_USER_CACHE_TTL) {
+            console.log(`[CREATOR-ALERTS] Using cached Twitch user ID: ${cached.userId} for ${username}`);
+            return cached.userId;
+        }
+        
+        // Check quota before making API call
+        if (!checkTwitchQuota()) {
+            console.warn(`[CREATOR-ALERTS] Twitch API quota limit reached, skipping user lookup for ${username}`);
+            return null;
+        }
+        
+        console.log(`[CREATOR-ALERTS] Looking up Twitch user ID for: ${username}`);
         const token = await getTwitchToken();
         
         const response = await fetch(`${TWITCH_API_BASE}/users?login=${encodeURIComponent(username)}`, {
@@ -160,12 +180,25 @@ async function getTwitchUserId(username) {
             }
         });
         
+        incrementTwitchQuota(); // Count this API call
+        
         if (!response.ok) {
             throw new Error(`Failed to get Twitch user: ${response.status} ${response.statusText}`);
         }
         
         const data = await response.json();
-        return data.data[0]?.id || null;
+        const userId = data.data[0]?.id || null;
+        
+        if (userId) {
+            // Cache the result
+            twitchUserIdCache.set(cacheKey, {
+                userId: userId,
+                timestamp: Date.now()
+            });
+            console.log(`[CREATOR-ALERTS] Cached Twitch user ID: ${userId} for ${username}`);
+        }
+        
+        return userId;
     } catch (error) {
         console.error(`[CREATOR-ALERTS] Error getting Twitch user ID for ${username}:`, error);
         return null;
@@ -173,10 +206,16 @@ async function getTwitchUserId(username) {
 }
 
 /**
- * Check if a Twitch user is currently live
+ * Check if a Twitch user is currently live - OPTIMIZED VERSION
  */
 async function isTwitchUserLive(userId) {
     try {
+        // Check quota before making API call
+        if (!checkTwitchQuota()) {
+            console.warn(`[CREATOR-ALERTS] Twitch API quota limit reached, skipping live check for ${userId}`);
+            return null;
+        }
+        
         const token = await getTwitchToken();
         
         const response = await fetch(`${TWITCH_API_BASE}/streams?user_id=${userId}`, {
@@ -185,6 +224,8 @@ async function isTwitchUserLive(userId) {
                 'Authorization': `Bearer ${token}`
             }
         });
+        
+        incrementTwitchQuota(); // Count this API call
         
         if (!response.ok) {
             throw new Error(`Failed to get Twitch streams: ${response.status} ${response.statusText}`);
@@ -1208,17 +1249,30 @@ const MAX_DAILY_CALLS = 9500; // Leave 500 buffer
 const QUOTA_RESET_HOUR = 0; // Reset at midnight UTC
 
 /**
- * Check if we're approaching the API quota limit
+ * Reset all API quota counters at midnight UTC
  */
-function checkYouTubeQuota() {
+function resetQuotaCounters() {
     const now = new Date();
     const currentHour = now.getUTCHours();
     
-    // Reset counter at midnight UTC
-    if (currentHour === QUOTA_RESET_HOUR && dailyApiCalls > 0) {
-        console.log(`[CREATOR-ALERTS] Resetting YouTube API daily call counter (was ${dailyApiCalls})`);
-        dailyApiCalls = 0;
+    // Reset counters at midnight UTC
+    if (currentHour === 0) {
+        if (dailyApiCalls > 0) {
+            console.log(`[CREATOR-ALERTS] Resetting YouTube API daily call counter (was ${dailyApiCalls})`);
+            dailyApiCalls = 0;
+        }
+        if (twitchDailyApiCalls > 0) {
+            console.log(`[CREATOR-ALERTS] Resetting Twitch API daily call counter (was ${twitchDailyApiCalls})`);
+            twitchDailyApiCalls = 0;
+        }
     }
+}
+
+/**
+ * Check if we're approaching the API quota limit
+ */
+function checkYouTubeQuota() {
+    resetQuotaCounters(); // Check for reset opportunity
     
     if (dailyApiCalls >= MAX_DAILY_CALLS) {
         console.warn(`[CREATOR-ALERTS] YouTube API daily quota limit approaching! Used: ${dailyApiCalls}/${MAX_DAILY_CALLS}`);
@@ -1235,6 +1289,33 @@ function incrementYouTubeQuota() {
     dailyApiCalls++;
     if (dailyApiCalls % 100 === 0) {
         console.log(`[CREATOR-ALERTS] YouTube API calls today: ${dailyApiCalls}/${MAX_DAILY_CALLS}`);
+    }
+}
+
+// Twitch API quota monitoring
+let twitchDailyApiCalls = 0;
+const MAX_TWITCH_DAILY_CALLS = 1000; // Twitch has higher limits, but let's be conservative
+
+/**
+ * Check if we're approaching the Twitch API quota limit
+ */
+function checkTwitchQuota() {
+    resetQuotaCounters(); // Check for reset opportunity
+    
+    if (twitchDailyApiCalls >= MAX_TWITCH_DAILY_CALLS) {
+        console.warn(`[CREATOR-ALERTS] Twitch API daily quota limit approaching! Used: ${twitchDailyApiCalls}/${MAX_TWITCH_DAILY_CALLS}`);
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Increment Twitch API call counter
+ */
+function incrementTwitchQuota() {
+    twitchDailyApiCalls++;
+    if (twitchDailyApiCalls % 100 === 0) {
+        console.log(`[CREATOR-ALERTS] Twitch API calls today: ${twitchDailyApiCalls}/${MAX_TWITCH_DAILY_CALLS}`);
     }
 }
 

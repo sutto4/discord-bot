@@ -38,36 +38,47 @@ module.exports = function startServer(client) {
     try {
       const [rows] = await appDb.query("SELECT guild_id, guild_name FROM guilds");
       
-             // Get detailed guild info including member and role counts
-       const guilds = await Promise.all(rows.map(async (row) => {
-         try {
-           console.log(`🔍 Fetching details for guild: ${row.guild_name} (${row.guild_id})`);
-           const guild = await client.guilds.fetch(row.guild_id);
-           console.log(`✅ Fetched guild: ${guild.name}, members: ${guild.memberCount}, roles: ${guild.roles.cache.size}`);
-           
-           await guild.roles.fetch();
-           
-           return {
-             guild_id: row.guild_id,
-             guild_name: row.guild_name,
-             memberCount: guild.memberCount || 0,
-             roleCount: guild.roles.cache.size || 0,
-             iconUrl: guild.iconURL ? guild.iconURL({ size: 128, extension: "png" }) : null,
-             createdAt: guild.createdAt ? guild.createdAt.toISOString() : null
-           };
-         } catch (err) {
-           console.error(`❌ Error fetching guild ${row.guild_name}:`, err.message);
-           // Fallback if we can't fetch guild details
-           return {
-             guild_id: row.guild_id,
-             guild_name: row.guild_name,
-             memberCount: 0,
-             roleCount: 0,
-             iconUrl: null,
-             createdAt: null
-           };
-         }
-       }));
+      // Get detailed guild info including member and role counts
+      const guilds = await Promise.all(rows.map(async (row) => {
+        try {
+          console.log(`🔍 Fetching details for guild: ${row.guild_name} (${row.guild_id})`);
+          const guild = await client.guilds.fetch(row.guild_id);
+          console.log(`✅ Fetched guild: ${guild.name}, members: ${guild.memberCount}, roles: ${guild.roles.cache.size}`);
+          
+          await guild.roles.fetch();
+          
+          // Update the database with fresh member count
+          try {
+            await appDb.query(
+              "UPDATE guilds SET member_count = ?, member_count_updated_at = NOW() WHERE guild_id = ?",
+              [guild.memberCount || 0, row.guild_id]
+            );
+            console.log(`💾 Updated member count for ${row.guild_name}: ${guild.memberCount}`);
+          } catch (dbError) {
+            console.warn(`⚠️ Could not update member count for ${row.guild_name}:`, dbError.message);
+          }
+          
+          return {
+            guild_id: row.guild_id,
+            guild_name: row.guild_name,
+            memberCount: guild.memberCount || 0,
+            roleCount: guild.roles.cache.size || 0,
+            iconUrl: guild.iconURL ? guild.iconURL({ size: 128, extension: "png" }) : null,
+            createdAt: guild.createdAt ? guild.createdAt.toISOString() : null
+          };
+        } catch (err) {
+          console.error(`❌ Error fetching guild ${row.guild_name}:`, err.message);
+          // Fallback if we can't fetch guild details
+          return {
+            guild_id: row.guild_id,
+            guild_name: row.guild_name,
+            memberCount: 0,
+            roleCount: 0,
+            iconUrl: null,
+            createdAt: null
+          };
+        }
+      }));
       
       res.json(guilds);
     } catch (err) {
@@ -482,6 +493,38 @@ module.exports = function startServer(client) {
       res.status(400).json({ error: err.message || "remove_failed" });
     }
   });
+
+  // Periodic member count sync job (runs every 6 hours)
+  const syncMemberCounts = async () => {
+    try {
+      console.log('🔄 Starting periodic member count sync...');
+      const [rows] = await appDb.query("SELECT guild_id, guild_name FROM guilds WHERE status != 'left' OR status IS NULL");
+      
+      let updatedCount = 0;
+      for (const row of rows) {
+        try {
+          const guild = await client.guilds.fetch(row.guild_id);
+          await appDb.query(
+            "UPDATE guilds SET member_count = ?, member_count_updated_at = NOW() WHERE guild_id = ?",
+            [guild.memberCount || 0, row.guild_id]
+          );
+          updatedCount++;
+        } catch (err) {
+          console.warn(`⚠️ Could not sync member count for ${row.guild_name}:`, err.message);
+        }
+      }
+      
+      console.log(`✅ Periodic sync completed: Updated ${updatedCount} guilds`);
+    } catch (error) {
+      console.error('❌ Periodic member count sync failed:', error);
+    }
+  };
+
+  // Start periodic sync (every 6 hours = 6 * 60 * 60 * 1000 ms)
+  setInterval(syncMemberCounts, 6 * 60 * 60 * 1000);
+  
+  // Run initial sync after 30 seconds (to let bot fully connect)
+  setTimeout(syncMemberCounts, 30000);
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`API server listening on port ${PORT}`);

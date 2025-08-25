@@ -19,6 +19,9 @@ module.exports = {
 		const reason = interaction.options.getString('reason') || 'No reason provided';
 
 		try {
+			// Fetch the member object for logging
+			const member = await interaction.guild.members.fetch(user.id);
+			
 			// Create case ID
 			const caseId = await generateCaseId(interaction.guildId);
 

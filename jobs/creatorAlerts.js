@@ -15,12 +15,48 @@ const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 let youtubeApiKey = YOUTUBE_API_KEY;
 
 /**
+ * Test YouTube API key functionality
+ */
+async function testYouTubeAPI() {
+    try {
+        console.log('[CREATOR-ALERTS] Testing YouTube API key...');
+        
+        // Simple test: search for a popular channel
+        const testResponse = await fetch(
+            `${YOUTUBE_API_BASE}/search?part=snippet&q=YouTube&type=channel&maxResults=1&key=${YOUTUBE_API_KEY}`
+        );
+        
+        if (testResponse.ok) {
+            const testData = await testResponse.json();
+            console.log('[CREATOR-ALERTS] YouTube API test successful:', testData.items ? testData.items.length : 0, 'results');
+            return true;
+        } else {
+            console.error('[CREATOR-ALERTS] YouTube API test failed:', testResponse.status, testResponse.statusText);
+            return false;
+        }
+    } catch (error) {
+        console.error('[CREATOR-ALERTS] YouTube API test error:', error);
+        return false;
+    }
+}
+
+/**
  * Get YouTube API key
  */
 async function getYouTubeToken() {
     if (!youtubeApiKey) {
         throw new Error('[CREATOR-ALERTS] YouTube API key not configured');
     }
+    
+    // Test the API key on first use
+    if (!global.youtubeApiTested) {
+        const apiWorking = await testYouTubeAPI();
+        if (!apiWorking) {
+            console.error('[CREATOR-ALERTS] YouTube API key test failed - check your configuration');
+        }
+        global.youtubeApiTested = true;
+    }
+    
     return youtubeApiKey;
 }
 
@@ -665,13 +701,16 @@ async function processCreatorAlerts(client) {
                     streamData = await isTwitchUserLive(twitchUserId);
                     isLive = streamData !== null;
                 } else if (rule.platform === 'youtube') {
+                    console.log(`[CREATOR-ALERTS] Processing YouTube rule for creator: ${rule.creator}`);
                     const youtubeChannelId = await getYouTubeChannelId(rule.creator);
                     if (!youtubeChannelId) {
                         console.log(`[CREATOR-ALERTS] Could not find YouTube channel ID for ${rule.creator}`);
                         continue;
                     }
+                    console.log(`[CREATOR-ALERTS] Got YouTube channel ID: ${youtubeChannelId}, checking if live...`);
                     streamData = await isYouTubeChannelLive(youtubeChannelId);
                     isLive = streamData !== null;
+                    console.log(`[CREATOR-ALERTS] YouTube live check result: isLive=${isLive}, streamData=${streamData ? 'Present' : 'None'}`);
                 } else if (rule.platform === 'kick') {
                     streamData = await isKickChannelLive(rule.creator);
                     isLive = streamData !== null;
@@ -790,20 +829,65 @@ async function getYouTubeChannelInfo(channelId) {
  */
 async function getYouTubeChannelId(username) {
     try {
-        // Try to get channel by username first
-        const response = await fetch(
-            `${YOUTUBE_API_BASE}/search?part=snippet&q=${encodeURIComponent(username)}&type=channel&maxResults=1&key=${YOUTUBE_API_KEY}`
+        console.log(`[CREATOR-ALERTS] Looking up YouTube channel ID for: ${username}`);
+        
+        // Clean the username (remove @ if present)
+        const cleanUsername = username.replace(/^@/, '');
+        console.log(`[CREATOR-ALERTS] Cleaned username: ${cleanUsername}`);
+        
+        // Method 1: Try to get channel by username (forUsername parameter)
+        try {
+            const usernameResponse = await fetch(
+                `${YOUTUBE_API_BASE}/channels?part=id&forUsername=${encodeURIComponent(cleanUsername)}&key=${YOUTUBE_API_KEY}`
+            );
+            
+            if (usernameResponse.ok) {
+                const usernameData = await usernameResponse.json();
+                console.log(`[CREATOR-ALERTS] Username lookup response:`, JSON.stringify(usernameData, null, 2));
+                
+                if (usernameData.items && usernameData.items.length > 0) {
+                    const channelId = usernameData.items[0].id;
+                    console.log(`[CREATOR-ALERTS] Found YouTube channel ID via username: ${channelId} for ${cleanUsername}`);
+                    return channelId;
+                }
+            }
+        } catch (usernameError) {
+            console.log(`[CREATOR-ALERTS] Username lookup failed, trying search method:`, usernameError.message);
+        }
+        
+        // Method 2: Search for channels by name
+        const searchResponse = await fetch(
+            `${YOUTUBE_API_BASE}/search?part=snippet&q=${encodeURIComponent(cleanUsername)}&type=channel&maxResults=5&key=${YOUTUBE_API_KEY}`
         );
         
-        if (!response.ok) {
-            throw new Error(`Failed to search YouTube channels: ${response.status} ${response.statusText}`);
+        if (!searchResponse.ok) {
+            throw new Error(`Failed to search YouTube channels: ${searchResponse.status} ${searchResponse.statusText}`);
         }
         
-        const data = await response.json();
-        if (data.items && data.items.length > 0) {
-            return data.items[0].id.channelId;
+        const searchData = await searchResponse.json();
+        console.log(`[CREATOR-ALERTS] YouTube search response:`, JSON.stringify(searchData, null, 2));
+        
+        if (searchData.items && searchData.items.length > 0) {
+            // Look for exact matches first
+            const exactMatch = searchData.items.find(item => 
+                item.snippet.title.toLowerCase() === cleanUsername.toLowerCase() ||
+                item.snippet.title.toLowerCase().includes(cleanUsername.toLowerCase()) ||
+                item.snippet.customUrl === cleanUsername
+            );
+            
+            if (exactMatch) {
+                const channelId = exactMatch.id.channelId;
+                console.log(`[CREATOR-ALERTS] Found exact YouTube channel match: ${channelId} for ${cleanUsername}`);
+                return channelId;
+            }
+            
+            // Fallback to first result
+            const channelId = searchData.items[0].id.channelId;
+            console.log(`[CREATOR-ALERTS] Using first search result: ${channelId} for ${cleanUsername}`);
+            return channelId;
         }
         
+        console.log(`[CREATOR-ALERTS] No YouTube channel found for: ${cleanUsername}`);
         return null;
     } catch (error) {
         console.error(`[CREATOR-ALERTS] Error getting YouTube channel ID for ${username}:`, error);
@@ -816,31 +900,46 @@ async function getYouTubeChannelId(username) {
  */
 async function isYouTubeChannelLive(channelId) {
     try {
+        console.log(`[CREATOR-ALERTS] Checking if YouTube channel ${channelId} is live...`);
+        
         const token = await getYouTubeToken();
         
         // First, get channel info and search for live streams
-        const searchResponse = await fetch(
-            `${YOUTUBE_API_BASE}/search?part=snippet&channelId=${channelId}&type=video&eventType=live&key=${YOUTUBE_API_KEY}`
-        );
+        const searchUrl = `${YOUTUBE_API_BASE}/search?part=snippet&channelId=${channelId}&type=video&eventType=live&key=${YOUTUBE_API_KEY}`;
+        console.log(`[CREATOR-ALERTS] YouTube search URL: ${searchUrl}`);
+        
+        const searchResponse = await fetch(searchUrl);
         
         if (!searchResponse.ok) {
             throw new Error(`Failed to search YouTube streams: ${searchResponse.status} ${searchResponse.statusText}`);
         }
         
         const searchData = await searchResponse.json();
+        console.log(`[CREATOR-ALERTS] YouTube live search response:`, JSON.stringify(searchData, null, 2));
         
         if (searchData.items && searchData.items.length > 0) {
             const liveVideo = searchData.items[0];
             const videoId = liveVideo.id.videoId;
+            console.log(`[CREATOR-ALERTS] Found live video ID: ${videoId}`);
             
             // Get detailed video information including statistics
-            const videoResponse = await fetch(
-                `${YOUTUBE_API_BASE}/videos?part=snippet,statistics,contentDetails&id=${videoId}&key=${YOUTUBE_API_KEY}`
-            );
+            const videoUrl = `${YOUTUBE_API_BASE}/videos?part=snippet,statistics,contentDetails&id=${videoId}&key=${YOUTUBE_API_KEY}`;
+            console.log(`[CREATOR-ALERTS] YouTube video details URL: ${videoUrl}`);
+            
+            const videoResponse = await fetch(videoUrl);
+            
             if (videoResponse.ok) {
                 const videoData = await videoResponse.json();
+                console.log(`[CREATOR-ALERTS] YouTube video details response:`, JSON.stringify(videoData, null, 2));
+                
                 if (videoData.items && videoData.items.length > 0) {
                     const video = videoData.items[0];
+                    
+                    // Check if it's actually live
+                    if (video.snippet.liveBroadcastContent !== 'live') {
+                        console.log(`[CREATOR-ALERTS] Video ${videoId} is not live (liveBroadcastContent: ${video.snippet.liveBroadcastContent})`);
+                        return null;
+                    }
                     
                     // Get category name
                     let categoryName = 'Unknown';
@@ -861,7 +960,7 @@ async function isYouTubeChannelLive(channelId) {
                     }
                     
                     // Return enriched stream data
-                    return {
+                    const streamData = {
                         id: videoId,
                         title: video.snippet.title,
                         description: video.snippet.description,
@@ -880,10 +979,87 @@ async function isYouTubeChannelLive(channelId) {
                         liveBroadcastContent: video.snippet.liveBroadcastContent,
                         isLive: video.snippet.liveBroadcastContent === 'live'
                     };
+                    
+                    console.log(`[CREATOR-ALERTS] YouTube stream data:`, JSON.stringify(streamData, null, 2));
+                    return streamData;
+                }
+            }
+        } else {
+            console.log(`[CREATOR-ALERTS] No live streams found with eventType=live, trying alternative method...`);
+            
+            // Fallback: Search for recent videos and check if any are live
+            const fallbackUrl = `${YOUTUBE_API_BASE}/search?part=snippet&channelId=${channelId}&type=video&order=date&maxResults=10&key=${YOUTUBE_API_KEY}`;
+            console.log(`[CREATOR-ALERTS] YouTube fallback search URL: ${fallbackUrl}`);
+            
+            const fallbackResponse = await fetch(fallbackUrl);
+            if (fallbackResponse.ok) {
+                const fallbackData = await fallbackResponse.json();
+                console.log(`[CREATOR-ALERTS] YouTube fallback search response:`, JSON.stringify(fallbackData, null, 2));
+                
+                if (fallbackData.items && fallbackData.items.length > 0) {
+                    // Check each video to see if it's live
+                    for (const video of fallbackData.items) {
+                        const videoId = video.id.videoId;
+                        const videoUrl = `${YOUTUBE_API_BASE}/videos?part=snippet,statistics,contentDetails&id=${videoId}&key=${YOUTUBE_API_KEY}`;
+                        
+                        const videoResponse = await fetch(videoUrl);
+                        if (videoResponse.ok) {
+                            const videoData = await videoResponse.json();
+                            if (videoData.items && videoData.items.length > 0) {
+                                const videoInfo = videoData.items[0];
+                                if (videoInfo.snippet.liveBroadcastContent === 'live') {
+                                    console.log(`[CREATOR-ALERTS] Found live video via fallback method: ${videoId}`);
+                                    
+                                    // Get category name
+                                    let categoryName = 'Unknown';
+                                    if (videoInfo.snippet.categoryId) {
+                                        try {
+                                            const categoryResponse = await fetch(
+                                                `${YOUTUBE_API_BASE}/videoCategories?part=snippet&id=${videoInfo.snippet.categoryId}&key=${YOUTUBE_API_KEY}`
+                                            );
+                                            if (categoryResponse.ok) {
+                                                const categoryData = await categoryResponse.json();
+                                                if (categoryData.items && categoryData.items.length > 0) {
+                                                    categoryName = categoryData.items[0].snippet.title;
+                                                }
+                                            }
+                                        } catch (categoryError) {
+                                            console.error('[CREATOR-ALERTS] Error fetching category:', categoryError);
+                                        }
+                                    }
+                                    
+                                    // Return enriched stream data
+                                    const streamData = {
+                                        id: videoId,
+                                        title: videoInfo.snippet.title,
+                                        description: videoInfo.snippet.description,
+                                        category: categoryName,
+                                        categoryId: videoInfo.snippet.categoryId,
+                                        thumbnails: videoInfo.snippet.thumbnails,
+                                        tags: videoInfo.snippet.tags || [],
+                                        language: videoInfo.snippet.defaultLanguage || videoInfo.snippet.defaultAudioLanguage || 'Unknown',
+                                        publishedAt: videoInfo.snippet.publishedAt,
+                                        channelTitle: videoInfo.snippet.channelTitle,
+                                        channelId: videoInfo.snippet.channelId,
+                                        viewerCount: parseInt(videoInfo.statistics.viewCount) || 0,
+                                        likeCount: parseInt(videoInfo.statistics.likeCount) || 0,
+                                        commentCount: parseInt(videoInfo.statistics.commentCount) || 0,
+                                        duration: videoInfo.contentDetails.duration,
+                                        liveBroadcastContent: videoInfo.snippet.liveBroadcastContent,
+                                        isLive: videoInfo.snippet.liveBroadcastContent === 'live'
+                                    };
+                                    
+                                    console.log(`[CREATOR-ALERTS] YouTube fallback stream data:`, JSON.stringify(streamData, null, 2));
+                                    return streamData;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
         
+        console.log(`[CREATOR-ALERTS] Channel ${channelId} is not live`);
         return null; // Not live
     } catch (error) {
         console.error(`[CREATOR-ALERTS] Error checking YouTube stream for channel ${channelId}:`, error);

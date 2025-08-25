@@ -11,6 +11,19 @@ const TWITCH_API_BASE = process.env.TWITCH_API_BASE || 'https://api.twitch.tv/he
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
+// YouTube token management (API key doesn't expire, but we'll keep the pattern)
+let youtubeApiKey = YOUTUBE_API_KEY;
+
+/**
+ * Get YouTube API key
+ */
+async function getYouTubeToken() {
+    if (!youtubeApiKey) {
+        throw new Error('[CREATOR-ALERTS] YouTube API key not configured');
+    }
+    return youtubeApiKey;
+}
+
 // Kick API configuration (using their public API)
 const KICK_API_BASE = 'https://kick.com/api/v1';
 
@@ -220,127 +233,208 @@ async function removeDiscordRole(client, guildId, userId, roleId, platform) {
 }
 
 /**
- * Send Discord notification about creator going live
+ * Send live notification to Discord channel
  */
-async function sendLiveNotification(client, guildId, channelId, creatorName, streamData, discordUserId = null, platform = 'twitch') {
+async function sendLiveNotification(client, guildId, channelId, creator, streamData, discordUserId, platform) {
     try {
         const guild = client.guilds.cache.get(guildId);
         if (!guild) {
-            console.error(`[CREATOR-ALERTS] Guild ${guildId} not found for notification`);
+            console.error(`[CREATOR-ALERTS] Guild ${guildId} not found`);
             return false;
         }
-        
+
         const channel = guild.channels.cache.get(channelId);
         if (!channel) {
-            console.error(`[CREATOR-ALERTS] Channel ${channelId} not found in guild ${guildId}`);
+            console.error(`[CREATOR-ALERTS] Channel ${channelId} not found in guild ${guild.name}`);
             return false;
         }
-        
+
         // Platform-specific configuration
         const platformConfig = {
             twitch: {
                 color: 0x9146FF,
-                name: 'Twitch',
+                title: '🔴 Twitch Stream Started!',
                 icon: '🎮',
-                url: `https://twitch.tv/${creatorName}`,
-                profilePicUrl: null,
-                thumbnailUrl: null
+                url: `https://twitch.tv/${creator}`,
+                getThumbnail: () => streamData?.thumbnail_url || streamData?.thumbnails?.medium?.url
             },
             youtube: {
                 color: 0xFF0000,
-                name: 'YouTube',
+                title: '🔴 YouTube Stream Started!',
                 icon: '📺',
-                url: `https://youtube.com/@${creatorName}`,
-                profilePicUrl: null,
-                thumbnailUrl: null
+                url: `https://youtube.com/watch?v=${streamData?.id}`,
+                getThumbnail: () => streamData?.thumbnails?.high?.url || streamData?.thumbnails?.medium?.url
             },
             kick: {
-                color: 0x00F2EA,
-                name: 'Kick',
-                icon: '🥊',
-                url: `https://kick.com/${creatorName}`,
-                profilePicUrl: null,
-                thumbnailUrl: null
+                color: 0x0077B6,
+                title: '🔴 Kick Stream Started!',
+                icon: '👋',
+                url: `https://kick.com/${creator}`,
+                getThumbnail: () => null // Kick doesn't provide thumbnails in their public API
             },
             tiktok: {
-                color: 0x000000,
-                name: 'TikTok',
+                color: 0x00F2EA,
+                title: '🔴 TikTok Live Started!',
                 icon: '📱',
-                url: `https://tiktok.com/@${creatorName}`,
-                profilePicUrl: null,
-                thumbnailUrl: null
+                url: `https://tiktok.com/@${creator}`,
+                getThumbnail: () => null // TikTok doesn't provide thumbnails in their public API
             }
         };
-        
+
         const config = platformConfig[platform] || platformConfig.twitch;
-        
-        // Get platform-specific profile picture and thumbnail
-        if (platform === 'twitch') {
-            try {
-                const token = await getTwitchToken();
-                const response = await fetch(`${TWITCH_API_BASE}/users?login=${encodeURIComponent(creatorName)}`, {
-                    headers: {
-                        'Client-ID': TWITCH_CLIENT_ID,
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                
-                if (response.ok) {
-                    const userData = await response.json();
-                    if (userData.data && userData.data[0] && userData.data[0].profile_image_url) {
-                        config.profilePicUrl = userData.data[0].profile_image_url;
-                    }
-                }
-            } catch (error) {
-                console.log(`[CREATOR-ALERTS] Could not fetch Twitch profile picture for ${creatorName}:`, error.message);
-            }
-            
-            // Process Twitch stream thumbnail
-            if (streamData?.thumbnail_url) {
-                config.thumbnailUrl = streamData.thumbnail_url
-                    .replace('{width}', '1280')
-                    .replace('{height}', '720');
-            }
-        }
-        
+        const thumbnailUrl = config.getThumbnail();
+
+        // Create rich embed
         const embed = {
             color: config.color,
-            title: `${config.icon} ${creatorName} is now LIVE on ${config.name}!`,
-            description: streamData?.title || 'No title available',
-            fields: [
-                {
-                    name: platform === 'twitch' ? 'Game' : 'Category',
-                    value: streamData?.game_name || 'Unknown',
-                    inline: true
-                },
-                {
-                    name: 'Viewers',
-                    value: streamData?.viewer_count?.toString() || '0',
-                    inline: true
-                }
-            ],
-            thumbnail: {
-                url: config.profilePicUrl || null
-            },
-            image: {
-                url: config.thumbnailUrl || null
-            },
+            title: config.title,
             url: config.url,
+            description: `**${creator}** is now live streaming!`,
+            fields: [],
+            thumbnail: thumbnailUrl ? { url: thumbnailUrl } : undefined,
             timestamp: new Date().toISOString(),
             footer: {
-                text: `Creator Alerts • ServerMate • ${config.name}`
+                text: `ServerMate Creator Alerts • ${platform.charAt(0).toUpperCase() + platform.slice(1)}`
             }
         };
-        
-        await channel.send({
-            content: `**${creatorName}** just went live on ${config.name}!`,
-            embeds: [embed]
-        });
-        
-        console.log(`[CREATOR-ALERTS] Sent live notification for ${creatorName} in guild ${guild.name}`);
+
+        // Add platform-specific fields
+        if (platform === 'youtube' && streamData) {
+            if (streamData.title) {
+                embed.fields.push({
+                    name: '📝 Stream Title',
+                    value: streamData.title.length > 100 ? streamData.title.substring(0, 97) + '...' : streamData.title,
+                    inline: false
+                });
+            }
+            
+            if (streamData.description) {
+                const description = streamData.description.length > 200 ? streamData.description.substring(0, 197) + '...' : streamData.description;
+                embed.fields.push({
+                    name: '📄 Description',
+                    value: description,
+                    inline: false
+                });
+            }
+            
+            if (streamData.category && streamData.category !== 'Unknown') {
+                embed.fields.push({
+                    name: '🏷️ Category',
+                    value: streamData.category,
+                    inline: true
+                });
+            }
+            
+            if (streamData.viewerCount > 0) {
+                embed.fields.push({
+                    name: '👥 Viewers',
+                    value: streamData.viewerCount.toLocaleString(),
+                    inline: true
+                });
+            }
+            
+            if (streamData.language && streamData.language !== 'Unknown') {
+                embed.fields.push({
+                    name: '🌐 Language',
+                    value: streamData.language,
+                    inline: true
+                });
+            }
+            
+            if (streamData.tags && streamData.tags.length > 0) {
+                const tags = streamData.tags.slice(0, 5).join(', ');
+                embed.fields.push({
+                    name: '🏷️ Tags',
+                    value: tags.length > 100 ? tags.substring(0, 97) + '...' : tags,
+                    inline: false
+                });
+            }
+        } else if (platform === 'twitch' && streamData) {
+            if (streamData.title) {
+                embed.fields.push({
+                    name: '📝 Stream Title',
+                    value: streamData.title.length > 100 ? streamData.title.substring(0, 97) + '...' : streamData.title,
+                    inline: false
+                });
+            }
+            
+            if (streamData.game_name) {
+                embed.fields.push({
+                    name: '🎮 Game',
+                    value: streamData.game_name,
+                    inline: true
+                });
+            }
+            
+            if (streamData.viewer_count) {
+                embed.fields.push({
+                    name: '👥 Viewers',
+                    value: streamData.viewer_count.toLocaleString(),
+                    inline: true
+                });
+            }
+            
+            if (streamData.language) {
+                embed.fields.push({
+                    name: '🌐 Language',
+                    value: streamData.language,
+                    inline: true
+                });
+            }
+        } else if (platform === 'kick' && streamData) {
+            if (streamData.title) {
+                embed.fields.push({
+                    name: '📝 Stream Title',
+                    value: streamData.title.length > 100 ? streamData.title.substring(0, 97) + '...' : streamData.title,
+                    inline: false
+                });
+            }
+            
+            if (streamData.category) {
+                embed.fields.push({
+                    name: '🎮 Category',
+                    value: streamData.category,
+                    inline: true
+                });
+            }
+            
+            if (streamData.viewerCount > 0) {
+                embed.fields.push({
+                    name: '👥 Viewers',
+                    value: streamData.viewerCount.toLocaleString(),
+                    inline: true
+                });
+            }
+        } else if (platform === 'tiktok' && streamData) {
+            if (streamData.title) {
+                embed.fields.push({
+                    name: '📝 Stream Title',
+                    value: streamData.title.length > 100 ? streamData.title.substring(0, 97) + '...' : streamData.title,
+                    inline: false
+                });
+            }
+            
+            if (streamData.category) {
+                embed.fields.push({
+                    name: '📱 Category',
+                    value: streamData.category,
+                    inline: true
+                });
+            }
+        }
+
+        // Add role mention if specified
+        let content = '';
+        if (discordUserId) {
+            content = `<@${discordUserId}>, you have a creator alert!`;
+        }
+
+        // Send the notification
+        await channel.send({ content, embeds: [embed] });
+        console.log(`[CREATOR-ALERTS] Live notification sent for ${creator} on ${platform} in guild ${guild.name}`);
         return true;
     } catch (error) {
-        console.error(`[CREATOR-ALERTS] Error sending live notification for ${creatorName} in guild ${guildId}:`, error);
+        console.error(`[CREATOR-ALERTS] Error sending live notification for ${creator} on ${platform}:`, error);
         return false;
     }
 }
@@ -563,30 +657,27 @@ async function processCreatorAlerts(client) {
                 let notificationSent = false;
 
                 if (rule.platform === 'twitch') {
-                    // Get Twitch user ID for the creator
                     const twitchUserId = await getTwitchUserId(rule.creator);
                     if (!twitchUserId) {
-                        console.error(`[CREATOR-ALERTS] Could not get Twitch user ID for ${rule.creator}`);
+                        console.log(`[CREATOR-ALERTS] Could not find Twitch user ID for ${rule.creator}`);
                         continue;
                     }
-                    
-                    // Check if user is currently live
                     streamData = await isTwitchUserLive(twitchUserId);
                     isLive = streamData !== null;
-
                 } else if (rule.platform === 'youtube') {
                     const youtubeChannelId = await getYouTubeChannelId(rule.creator);
                     if (!youtubeChannelId) {
-                        console.error(`[CREATOR-ALERTS] Could not get YouTube channel ID for ${rule.creator}`);
+                        console.log(`[CREATOR-ALERTS] Could not find YouTube channel ID for ${rule.creator}`);
                         continue;
                     }
-                    isLive = await isYouTubeChannelLive(youtubeChannelId);
-
+                    streamData = await isYouTubeChannelLive(youtubeChannelId);
+                    isLive = streamData !== null;
                 } else if (rule.platform === 'kick') {
-                    isLive = await isKickChannelLive(rule.creator);
-
+                    streamData = await isKickChannelLive(rule.creator);
+                    isLive = streamData !== null;
                 } else if (rule.platform === 'tiktok') {
-                    isLive = await isTikTokUserLive(rule.creator);
+                    streamData = await isTikTokUserLive(rule.creator);
+                    isLive = streamData !== null;
                 }
                 
                 // Check if we've already processed this user's status
@@ -596,20 +687,13 @@ async function processCreatorAlerts(client) {
                 console.log(`[CREATOR-ALERTS] Stream data for ${rule.creator}:`, isLive ? 'LIVE' : 'OFFLINE');
                 console.log(`[CREATOR-ALERTS] Last status from cache:`, lastStatus);
                 
+                const now = Date.now();
                 if (isLive && !lastStatus?.live) {
-                    // Creator just went live
-                    console.log(`[CREATOR-ALERTS] ${rule.creator} just went live on ${rule.platform} in guild ${rule.guild_id}`);
+                    console.log(`[CREATOR-ALERTS] ${rule.creator} went live on ${rule.platform} in guild ${rule.guild_id}`);
                     
-                    // Assign role if Discord user is mapped
-                    if (rule.discord_user_id) {
-                        try {
-                            await assignDiscordRole(client, rule.guild_id, rule.discord_user_id, rule.role_id, rule.platform);
-                            console.log(`[CREATOR-ALERTS] Role assigned to Discord user ${rule.discord_user_id} for ${rule.creator}`);
-                        } catch (roleError) {
-                            console.error(`[CREATOR-ALERTS] Failed to assign role for ${rule.creator}:`, roleError);
-                        }
-                    } else {
-                        console.log(`[CREATOR-ALERTS] No Discord user mapped for ${rule.creator} - skipping role assignment`);
+                    // Assign Discord role if specified
+                    if (rule.role_id) {
+                        await assignDiscordRole(client, rule.guild_id, rule.discord_user_id, rule.role_id, rule.platform);
                     }
                     
                     // Send notification
@@ -623,51 +707,18 @@ async function processCreatorAlerts(client) {
                         await sendLiveNotification(client, rule.guild_id, rule.channel_id, rule.creator, streamData, rule.discord_user_id, 'tiktok');
                     }
                     
-                    // Update cache with stream start time and stream ID for better tracking
-                    if (!global.creatorAlertCache) global.creatorAlertCache = {};
-                    const cacheData = { 
-                        live: true, 
-                        timestamp: Date.now(),
-                        streamStartedAt: streamData?.started_at || null, // Use streamData.started_at if available
-                        streamId: streamData?.id || null, // Use streamData.id if available
-                        lastNotificationSent: Date.now()
-                    };
-                    global.creatorAlertCache[cacheKey] = cacheData;
-                    
-                    // Persist to database
-                    await updateCacheInDb(cacheKey, cacheData);
-                    
+                    // Update cache
+                    global.creatorAlertCache[cacheKey] = { live: true, timestamp: now };
                 } else if (!isLive && lastStatus?.live) {
-                    // Creator just went offline
-                    console.log(`[CREATOR-ALERTS] ${rule.creator} just went offline on ${rule.platform} in guild ${rule.guild_id}`);
+                    console.log(`[CREATOR-ALERTS] ${rule.creator} went offline on ${rule.platform} in guild ${rule.guild_id}`);
                     
-                    // Remove role if Discord user is mapped
-                    if (rule.discord_user_id) {
-                        try {
-                            await removeDiscordRole(client, rule.guild_id, rule.discord_user_id, rule.role_id, rule.platform);
-                            console.log(`[CREATOR-ALERTS] Role removed from Discord user ${rule.discord_user_id} for ${rule.creator}`);
-                        } catch (roleError) {
-                            console.error(`[CREATOR-ALERTS] Failed to remove role for ${rule.creator}:`, roleError);
-                        }
-                    } else {
-                        console.log(`[CREATOR-ALERTS] No Discord user mapped for ${rule.creator} - skipping role removal`);
+                    // Remove Discord role if specified
+                    if (rule.role_id) {
+                        await removeDiscordRole(client, rule.guild_id, rule.discord_user_id, rule.role_id, rule.platform);
                     }
                     
-                    // Update cache (no offline notification)
-                    if (!global.creatorAlertCache) global.creatorAlertCache = {};
-                    const cacheData = { 
-                        live: false, 
-                        timestamp: Date.now(),
-                        streamStartedAt: null,
-                        streamId: null,
-                        lastNotificationSent: Date.now()
-                    };
-                    global.creatorAlertCache[cacheKey] = cacheData;
-                    
-                    // Persist to database
-                    await updateCacheInDb(cacheKey, cacheData);
-                } else {
-                    console.log(`[CREATOR-ALERTS] No status change for ${rule.creator} - still ${isLive ? 'live' : 'offline'}`);
+                    // Update cache
+                    global.creatorAlertCache[cacheKey] = { live: false, timestamp: now };
                 }
                 
                 // Clean up old cache entries (older than 24 hours)
@@ -695,63 +746,148 @@ async function processCreatorAlerts(client) {
 }
 
 /**
- * Get YouTube channel ID from username/channel name
+ * Get YouTube channel information
  */
-async function getYouTubeChannelId(identifier) {
-    if (!YOUTUBE_API_KEY) {
-        console.error('[CREATOR-ALERTS] YouTube API key not configured');
-        return null;
-    }
-    
+async function getYouTubeChannelInfo(channelId) {
     try {
-        // Try to get channel by username first
-        let response = await fetch(`${YOUTUBE_API_BASE}/channels?part=id&forUsername=${encodeURIComponent(identifier)}&key=${YOUTUBE_API_KEY}`);
+        const response = await fetch(
+            `${YOUTUBE_API_BASE}/channels?part=snippet,statistics,brandingSettings&id=${channelId}&key=${YOUTUBE_API_KEY}`
+        );
         
-        if (response.ok) {
-            const data = await response.json();
-            if (data.items && data.items.length > 0) {
-                return data.items[0].id;
-            }
+        if (!response.ok) {
+            throw new Error(`Failed to get YouTube channel info: ${response.status} ${response.statusText}`);
         }
         
-        // If username not found, try searching for the channel
-        response = await fetch(`${YOUTUBE_API_BASE}/search?part=snippet&q=${encodeURIComponent(identifier)}&type=channel&key=${YOUTUBE_API_KEY}`);
-        
-        if (response.ok) {
-            const data = await response.json();
-            if (data.items && data.items.length > 0) {
-                return data.items[0].snippet.channelId;
-            }
+        const data = await response.json();
+        if (data.items && data.items.length > 0) {
+            const channel = data.items[0];
+            return {
+                id: channel.id,
+                title: channel.snippet.title,
+                description: channel.snippet.description,
+                customUrl: channel.snippet.customUrl,
+                publishedAt: channel.snippet.publishedAt,
+                thumbnails: channel.snippet.thumbnails,
+                country: channel.snippet.country,
+                language: channel.snippet.defaultLanguage,
+                subscriberCount: parseInt(channel.statistics.subscriberCount) || 0,
+                viewCount: parseInt(channel.statistics.viewCount) || 0,
+                videoCount: parseInt(channel.statistics.videoCount) || 0,
+                hiddenSubscriberCount: channel.statistics.hiddenSubscriberCount,
+                banner: channel.brandingSettings?.image?.bannerExternalUrl,
+                keywords: channel.brandingSettings?.channel?.keywords
+            };
         }
-        
         return null;
     } catch (error) {
-        console.error(`[CREATOR-ALERTS] Error getting YouTube channel ID for ${identifier}:`, error);
+        console.error(`[CREATOR-ALERTS] Error getting YouTube channel info for ${channelId}:`, error);
         return null;
     }
 }
 
 /**
- * Check if a YouTube channel is currently live streaming
+ * Get YouTube channel ID from username or channel URL
  */
-async function isYouTubeChannelLive(channelId) {
-    if (!YOUTUBE_API_KEY) {
-        console.error('[CREATOR-ALERTS] YouTube API key not configured');
-        return false;
-    }
-    
+async function getYouTubeChannelId(username) {
     try {
-        const response = await fetch(`${YOUTUBE_API_BASE}/search?part=snippet&channelId=${channelId}&type=video&eventType=live&key=${YOUTUBE_API_KEY}`);
+        // Try to get channel by username first
+        const response = await fetch(
+            `${YOUTUBE_API_BASE}/search?part=snippet&q=${encodeURIComponent(username)}&type=channel&maxResults=1&key=${YOUTUBE_API_KEY}`
+        );
         
         if (!response.ok) {
-            throw new Error(`Failed to get YouTube live streams: ${response.status} ${response.statusText}`);
+            throw new Error(`Failed to search YouTube channels: ${response.status} ${response.statusText}`);
         }
         
         const data = await response.json();
-        return data.items && data.items.length > 0;
+        if (data.items && data.items.length > 0) {
+            return data.items[0].id.channelId;
+        }
+        
+        return null;
     } catch (error) {
-        console.error(`[CREATOR-ALERTS] Error checking YouTube live stream for channel ${channelId}:`, error);
-        return false;
+        console.error(`[CREATOR-ALERTS] Error getting YouTube channel ID for ${username}:`, error);
+        return null;
+    }
+}
+
+/**
+ * Check if a YouTube channel is currently live
+ */
+async function isYouTubeChannelLive(channelId) {
+    try {
+        const token = await getYouTubeToken();
+        
+        // First, get channel info and search for live streams
+        const searchResponse = await fetch(
+            `${YOUTUBE_API_BASE}/search?part=snippet&channelId=${channelId}&type=video&eventType=live&key=${YOUTUBE_API_KEY}`
+        );
+        
+        if (!searchResponse.ok) {
+            throw new Error(`Failed to search YouTube streams: ${searchResponse.status} ${searchResponse.statusText}`);
+        }
+        
+        const searchData = await searchResponse.json();
+        
+        if (searchData.items && searchData.items.length > 0) {
+            const liveVideo = searchData.items[0];
+            const videoId = liveVideo.id.videoId;
+            
+            // Get detailed video information including statistics
+            const videoResponse = await fetch(
+                `${YOUTUBE_API_BASE}/videos?part=snippet,statistics,contentDetails&id=${videoId}&key=${YOUTUBE_API_KEY}`
+            );
+            if (videoResponse.ok) {
+                const videoData = await videoResponse.json();
+                if (videoData.items && videoData.items.length > 0) {
+                    const video = videoData.items[0];
+                    
+                    // Get category name
+                    let categoryName = 'Unknown';
+                    if (video.snippet.categoryId) {
+                        try {
+                            const categoryResponse = await fetch(
+                                `${YOUTUBE_API_BASE}/videoCategories?part=snippet&id=${video.snippet.categoryId}&key=${YOUTUBE_API_KEY}`
+                            );
+                            if (categoryResponse.ok) {
+                                const categoryData = await categoryResponse.json();
+                                if (categoryData.items && categoryData.items.length > 0) {
+                                    categoryName = categoryData.items[0].snippet.title;
+                                }
+                            }
+                        } catch (categoryError) {
+                            console.error('[CREATOR-ALERTS] Error fetching category:', categoryError);
+                        }
+                    }
+                    
+                    // Return enriched stream data
+                    return {
+                        id: videoId,
+                        title: video.snippet.title,
+                        description: video.snippet.description,
+                        category: categoryName,
+                        categoryId: video.snippet.categoryId,
+                        thumbnails: video.snippet.thumbnails,
+                        tags: video.snippet.tags || [],
+                        language: video.snippet.defaultLanguage || video.snippet.defaultAudioLanguage || 'Unknown',
+                        publishedAt: video.snippet.publishedAt,
+                        channelTitle: video.snippet.channelTitle,
+                        channelId: video.snippet.channelId,
+                        viewerCount: parseInt(video.statistics.viewCount) || 0,
+                        likeCount: parseInt(video.statistics.likeCount) || 0,
+                        commentCount: parseInt(video.statistics.commentCount) || 0,
+                        duration: video.contentDetails.duration,
+                        liveBroadcastContent: video.snippet.liveBroadcastContent,
+                        isLive: video.snippet.liveBroadcastContent === 'live'
+                    };
+                }
+            }
+        }
+        
+        return null; // Not live
+    } catch (error) {
+        console.error(`[CREATOR-ALERTS] Error checking YouTube stream for channel ${channelId}:`, error);
+        return null;
     }
 }
 
@@ -790,10 +926,35 @@ async function getKickChannelInfo(username) {
 async function isKickChannelLive(username) {
     try {
         const channelInfo = await getKickChannelInfo(username);
-        return channelInfo ? channelInfo.isLive : false;
+        if (channelInfo && channelInfo.isLive) {
+            // Return enriched stream data
+            return {
+                id: channelInfo.id,
+                title: channelInfo.streamTitle || 'Live Stream',
+                description: `Live stream by ${channelInfo.displayName}`,
+                category: 'Gaming', // Kick is primarily gaming-focused
+                thumbnails: {
+                    high: { url: null }, // Kick doesn't provide thumbnails in public API
+                    medium: { url: null },
+                    default: { url: null }
+                },
+                tags: [],
+                language: 'Unknown',
+                publishedAt: new Date().toISOString(),
+                channelTitle: channelInfo.displayName,
+                channelId: channelInfo.id,
+                viewerCount: channelInfo.viewerCount || 0,
+                likeCount: 0, // Not available in Kick public API
+                commentCount: 0, // Not available in Kick public API
+                duration: null,
+                liveBroadcastContent: 'live',
+                isLive: true
+            };
+        }
+        return null; // Not live
     } catch (error) {
         console.error(`[CREATOR-ALERTS] Error checking Kick live status for ${username}:`, error);
-        return false;
+        return null;
     }
 }
 
@@ -837,10 +998,35 @@ async function getTikTokUserInfo(username) {
 async function isTikTokUserLive(username) {
     try {
         const userInfo = await getTikTokUserInfo(username);
-        return userInfo ? userInfo.isLive : false;
+        if (userInfo && userInfo.isLive) {
+            // Return enriched stream data (limited due to TikTok API restrictions)
+            return {
+                id: `tiktok_${username}_${Date.now()}`,
+                title: 'Live Stream',
+                description: `Live stream by @${username}`,
+                category: 'Entertainment',
+                thumbnails: {
+                    high: { url: null }, // Not available in TikTok public API
+                    medium: { url: null },
+                    default: { url: null }
+                },
+                tags: [],
+                language: 'Unknown',
+                publishedAt: new Date().toISOString(),
+                channelTitle: username,
+                channelId: username,
+                viewerCount: 0, // Not available in TikTok public API
+                likeCount: 0,
+                commentCount: 0,
+                duration: null,
+                liveBroadcastContent: 'live',
+                isLive: true
+            };
+        }
+        return null; // Not live
     } catch (error) {
         console.error(`[CREATOR-ALERTS] Error checking TikTok live status for ${username}:`, error);
-        return false;
+        return null;
     }
 }
 

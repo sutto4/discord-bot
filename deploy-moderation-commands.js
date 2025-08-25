@@ -51,7 +51,7 @@ async function getGuildsWithModerationFeature() {
 			SELECT DISTINCT g.guild_id, g.guild_name, gf.enabled
 			FROM guilds g
 			JOIN guild_features gf ON g.guild_id = gf.guild_id
-			WHERE gf.feature_key = 'moderation' 
+			WHERE gf.feature_name = 'moderation' 
 			AND gf.enabled = 1
 			AND g.status = 'active'
 		`);

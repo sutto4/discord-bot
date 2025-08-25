@@ -330,7 +330,7 @@ async function sendLiveNotification(client, guildId, channelId, creator, streamD
             thumbnail: thumbnailUrl ? { url: thumbnailUrl } : undefined,
             timestamp: new Date().toISOString(),
             footer: {
-                text: `ServerMate Creator Alerts • ${platform.charAt(0).toUpperCase() + platform.slice(1)}`
+                text: `ServerMate Creator Alerts • ${platform.charAt(0).toUpperCase() + platform.slice(1)}${platform === 'youtube' ? ' • Live data may be delayed' : ''}`
             }
         };
 
@@ -364,7 +364,7 @@ async function sendLiveNotification(client, guildId, channelId, creator, streamD
             if (streamData.viewerCount > 0) {
                 embed.fields.push({
                     name: '👥 Viewers',
-                    value: streamData.viewerCount.toLocaleString(),
+                    value: `${streamData.viewerCount.toLocaleString()}${streamData.isLive ? ' (Live)' : ' (Total Views)'}`,
                     inline: true
                 });
             }
@@ -405,7 +405,7 @@ async function sendLiveNotification(client, guildId, channelId, creator, streamD
             if (streamData.viewer_count) {
                 embed.fields.push({
                     name: '👥 Viewers',
-                    value: streamData.viewer_count.toLocaleString(),
+                    value: `${streamData.viewer_count.toLocaleString()}${streamData.isLive ? ' (Live)' : ' (Total Views)'}`,
                     inline: true
                 });
             }
@@ -437,7 +437,7 @@ async function sendLiveNotification(client, guildId, channelId, creator, streamD
             if (streamData.viewerCount > 0) {
                 embed.fields.push({
                     name: '👥 Viewers',
-                    value: streamData.viewerCount.toLocaleString(),
+                    value: `${streamData.viewerCount.toLocaleString()}${streamData.isLive ? ' (Live)' : ' (Total Views)'}`,
                     inline: true
                 });
             }
@@ -972,13 +972,47 @@ async function isYouTubeChannelLive(channelId) {
                         publishedAt: video.snippet.publishedAt,
                         channelTitle: video.snippet.channelTitle,
                         channelId: video.snippet.channelId,
-                        viewerCount: parseInt(video.statistics.viewCount) || 0,
+                        viewerCount: 0, // We'll get this separately for live streams
                         likeCount: parseInt(video.statistics.likeCount) || 0,
                         commentCount: parseInt(video.statistics.commentCount) || 0,
                         duration: video.contentDetails.duration,
                         liveBroadcastContent: video.snippet.liveBroadcastContent,
                         isLive: video.snippet.liveBroadcastContent === 'live'
                     };
+                    
+                    // For live streams, get the actual live viewer count
+                    if (streamData.isLive) {
+                        try {
+                            // Try to get live stream details with concurrent viewer count
+                            const liveResponse = await fetch(
+                                `${YOUTUBE_API_BASE}/videos?part=statistics&id=${videoId}&key=${YOUTUBE_API_KEY}`
+                            );
+                            
+                            if (liveResponse.ok) {
+                                const liveData = await liveResponse.json();
+                                if (liveData.items && liveData.items.length > 0) {
+                                    const liveStats = liveData.items[0].statistics;
+                                    
+                                    // Try to get live viewer count (this field might not always be available)
+                                    if (liveStats.concurrentViewerCount) {
+                                        streamData.viewerCount = parseInt(liveStats.concurrentViewerCount);
+                                        console.log(`[CREATOR-ALERTS] Got live viewer count: ${streamData.viewerCount}`);
+                                    } else {
+                                        // Fallback: try to get from the original response
+                                        streamData.viewerCount = parseInt(video.statistics.viewCount) || 0;
+                                        console.log(`[CREATOR-ALERTS] Using fallback viewer count: ${streamData.viewerCount} (may be total views, not live viewers)`);
+                                    }
+                                }
+                            }
+                        } catch (liveError) {
+                            console.error('[CREATOR-ALERTS] Error getting live viewer count:', liveError);
+                            // Use fallback
+                            streamData.viewerCount = parseInt(video.statistics.viewCount) || 0;
+                        }
+                    } else {
+                        // For non-live videos, use the regular view count
+                        streamData.viewerCount = parseInt(video.statistics.viewCount) || 0;
+                    }
                     
                     console.log(`[CREATOR-ALERTS] YouTube stream data:`, JSON.stringify(streamData, null, 2));
                     return streamData;
@@ -1041,13 +1075,47 @@ async function isYouTubeChannelLive(channelId) {
                                         publishedAt: videoInfo.snippet.publishedAt,
                                         channelTitle: videoInfo.snippet.channelTitle,
                                         channelId: videoInfo.snippet.channelId,
-                                        viewerCount: parseInt(videoInfo.statistics.viewCount) || 0,
+                                        viewerCount: 0, // We'll get this separately for live streams
                                         likeCount: parseInt(videoInfo.statistics.likeCount) || 0,
                                         commentCount: parseInt(videoInfo.statistics.commentCount) || 0,
                                         duration: videoInfo.contentDetails.duration,
                                         liveBroadcastContent: videoInfo.snippet.liveBroadcastContent,
                                         isLive: videoInfo.snippet.liveBroadcastContent === 'live'
                                     };
+                                    
+                                    // For live streams, get the actual live viewer count
+                                    if (streamData.isLive) {
+                                        try {
+                                            // Try to get live stream details with concurrent viewer count
+                                            const liveResponse = await fetch(
+                                                `${YOUTUBE_API_BASE}/videos?part=statistics&id=${videoId}&key=${YOUTUBE_API_KEY}`
+                                            );
+                                            
+                                            if (liveResponse.ok) {
+                                                const liveData = await liveResponse.json();
+                                                if (liveData.items && liveData.items.length > 0) {
+                                                    const liveStats = liveData.items[0].statistics;
+                                                    
+                                                    // Try to get live viewer count (this field might not always be available)
+                                                    if (liveStats.concurrentViewerCount) {
+                                                        streamData.viewerCount = parseInt(liveStats.concurrentViewerCount);
+                                                        console.log(`[CREATOR-ALERTS] Got live viewer count: ${streamData.viewerCount}`);
+                                                    } else {
+                                                        // Fallback: try to get from the original response
+                                                        streamData.viewerCount = parseInt(videoInfo.statistics.viewCount) || 0;
+                                                        console.log(`[CREATOR-ALERTS] Using fallback viewer count: ${streamData.viewerCount} (may be total views, not live viewers)`);
+                                                    }
+                                                }
+                                            }
+                                        } catch (liveError) {
+                                            console.error('[CREATOR-ALERTS] Error getting live viewer count:', liveError);
+                                            // Use fallback
+                                            streamData.viewerCount = parseInt(videoInfo.statistics.viewCount) || 0;
+                                        }
+                                    } else {
+                                        // For non-live videos, use the regular view count
+                                        streamData.viewerCount = parseInt(videoInfo.statistics.viewCount) || 0;
+                                    }
                                     
                                     console.log(`[CREATOR-ALERTS] YouTube fallback stream data:`, JSON.stringify(streamData, null, 2));
                                     return streamData;

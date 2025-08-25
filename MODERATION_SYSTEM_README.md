@@ -86,7 +86,7 @@ Audit trail of all moderation-related actions.
    ```
    /setmodlog #moderation-logs
    ```
-   This sets a dedicated channel for moderation actions.
+   This sets a dedicated channel for moderation actions in the database.
 
 2. **Set General Log Channel** (Alternative):
    ```
@@ -104,6 +104,11 @@ Audit trail of all moderation-related actions.
 - **Moderation Log Channel** (set with `/setmodlog`) - Takes priority for moderation actions
 - **General Log Channel** (set with `/setverifylog`) - Fallback if no moderation log channel is set
 - If neither is set, no logging occurs
+
+#### Database Storage
+- Moderation log channels are now stored in the `guilds.mod_channel_id` column
+- This ensures persistence across bot restarts and server reboots
+- No more lost configuration due to file corruption or deletion
 
 ### Deploy Commands
 

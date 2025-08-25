@@ -23,18 +23,34 @@ function sanitize(text, fallback = 'N/A') {
 
 async function logModerationAction(guild, action, moderatorUser, targetMember, reason, durationLabel) {
 	try {
-		// First try to get moderation-specific log channel
+		// First try to get moderation-specific log channel from database
 		let logChannelId = null;
 		
 		// Check for moderation log channel first
-		const modLogPath = path.join(__dirname, '../data/moderation_log_channels.json');
-		if (require('fs').existsSync(modLogPath)) {
-			try {
-				const modLogData = JSON.parse(require('fs').readFileSync(modLogPath, 'utf8'));
-				logChannelId = modLogData[guild.id] || null;
-			} catch (err) {
-				// Ignore errors reading mod log config
+		try {
+			const mysql = require('mysql2/promise');
+			const dbConfig = {
+				host: process.env.BOT_DB_HOST,
+				user: process.env.BOT_DB_USER,
+				password: process.env.BOT_DB_PASSWORD,
+				database: process.env.BOT_DB_NAME,
+				waitForConnections: true,
+				connectionLimit: 10,
+				queueLimit: 0
+			};
+			
+			const connection = await mysql.createConnection(dbConfig);
+			const [rows] = await connection.execute(
+				'SELECT mod_channel_id FROM guilds WHERE guild_id = ?',
+				[guild.id]
+			);
+			connection.end();
+			
+			if (rows.length > 0 && rows[0].mod_channel_id) {
+				logChannelId = rows[0].mod_channel_id;
 			}
+		} catch (err) {
+			console.error('Failed to get mod log channel from database:', err);
 		}
 		
 		// Fall back to general verify log channel if no moderation log channel is set

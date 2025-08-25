@@ -141,16 +141,32 @@ async function resetCommands(interaction) {
 // Helper functions - these will be implemented with database integration
 async function getModerationStatus(guildId) {
 	try {
-		// Get moderation log channel
-		const modLogPath = path.join(__dirname, '../data/moderation_log_channels.json');
+		// Get moderation log channel from database
 		let modLogChannel = null;
-		if (require('fs').existsSync(modLogPath)) {
-			try {
-				const modLogData = JSON.parse(require('fs').readFileSync(modLogPath, 'utf8'));
-				modLogChannel = modLogData[guildId] || null;
-			} catch (err) {
-				// Ignore errors reading mod log config
+		try {
+			const mysql = require('mysql2/promise');
+			const dbConfig = {
+				host: process.env.BOT_DB_HOST,
+				user: process.env.BOT_DB_USER,
+				password: process.env.BOT_DB_PASSWORD,
+				database: process.env.BOT_DB_NAME,
+				waitForConnections: true,
+				connectionLimit: 10,
+				queueLimit: 0
+			};
+			
+			const connection = await mysql.createConnection(dbConfig);
+			const [rows] = await connection.execute(
+				'SELECT mod_channel_id FROM guilds WHERE guild_id = ?',
+				[guildId]
+			);
+			connection.end();
+			
+			if (rows.length > 0 && rows[0].mod_channel_id) {
+				modLogChannel = rows[0].mod_channel_id;
 			}
+		} catch (err) {
+			console.error('Failed to get mod log channel from database:', err);
 		}
 		
 		// Get general verify log channel as fallback

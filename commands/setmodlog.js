@@ -4,33 +4,74 @@ const {
 	ChannelType,
 	MessageFlags
 } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
+const mysql = require('mysql2/promise');
 
-const configPath = path.join(__dirname, '../data/moderation_log_channels.json');
+// Database configuration
+const dbConfig = {
+	host: process.env.BOT_DB_HOST,
+	user: process.env.BOT_DB_USER,
+	password: process.env.BOT_DB_PASSWORD,
+	database: process.env.BOT_DB_NAME,
+	waitForConnections: true,
+	connectionLimit: 10,
+	queueLimit: 0
+};
 
-function saveModLogChannel(guildId, channelId) {
-	let data = {};
-	if (fs.existsSync(configPath)) {
-		try {
-			data = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-		} catch (err) {
-			console.error('❌ Failed to parse moderation_log_channels.json:', err);
-			data = {};
+async function saveModLogChannel(guildId, channelId) {
+	let connection;
+	try {
+		connection = await mysql.createConnection(dbConfig);
+		
+		// First check if the guild exists
+		const [guildRows] = await connection.execute(
+			'SELECT guild_id FROM guilds WHERE guild_id = ?',
+			[guildId]
+		);
+		
+		if (guildRows.length === 0) {
+			// Guild doesn't exist, create it with basic info
+			await connection.execute(
+				'INSERT INTO guilds (guild_id, name, owner_id, premium) VALUES (?, ?, ?, FALSE)',
+				[guildId, 'Unknown Guild', 'Unknown Owner', false]
+			);
+		}
+		
+		// Update the guilds table with the mod channel ID
+		await connection.execute(
+			'UPDATE guilds SET mod_channel_id = ? WHERE guild_id = ?',
+			[channelId, guildId]
+		);
+		
+		return true;
+	} catch (error) {
+		console.error('❌ Database error saving mod log channel:', error);
+		return false;
+	} finally {
+		if (connection) {
+			connection.end();
 		}
 	}
-	data[guildId] = channelId;
-	fs.writeFileSync(configPath, JSON.stringify(data, null, 2));
 }
 
-function getModLogChannel(guildId) {
-	if (!fs.existsSync(configPath)) return null;
+async function getModLogChannel(guildId) {
+	let connection;
 	try {
-		const data = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-		return data[guildId] || null;
-	} catch (err) {
-		console.error('❌ Failed to read moderation_log_channels.json:', err);
+		connection = await mysql.createConnection(dbConfig);
+		
+		// Get the mod channel ID from the guilds table
+		const [rows] = await connection.execute(
+			'SELECT mod_channel_id FROM guilds WHERE guild_id = ?',
+			[guildId]
+		);
+		
+		return rows.length > 0 ? rows[0].mod_channel_id : null;
+	} catch (error) {
+		console.error('❌ Database error getting mod log channel:', error);
 		return null;
+	} finally {
+		if (connection) {
+			connection.end();
+		}
 	}
 }
 
@@ -50,18 +91,23 @@ module.exports = {
 		const channel = interaction.options.getChannel('channel');
 		
 		// Save the moderation log channel
-		saveModLogChannel(interaction.guild.id, channel.id);
+		const success = await saveModLogChannel(interaction.guild.id, channel.id);
+		
+		if (!success) {
+			return interaction.reply({
+				content: '❌ Failed to save moderation log channel. Please try again.',
+				flags: MessageFlags.Ephemeral
+			});
+		}
 		
 		// Check if there's also a general verify log channel
-		const verifyLogPath = path.join(__dirname, '../data/verify_log_channels.json');
 		let hasVerifyLog = false;
-		if (fs.existsSync(verifyLogPath)) {
-			try {
-				const verifyData = JSON.parse(fs.readFileSync(verifyLogPath, 'utf8'));
-				hasVerifyLog = verifyData[interaction.guild.id] ? true : false;
-			} catch (err) {
-				// Ignore errors reading verify log config
-			}
+		try {
+			const { getLogChannelId } = require('../utils/guildConfig');
+			const verifyLogChannel = await getLogChannelId(interaction.guild.id);
+			hasVerifyLog = verifyLogChannel ? true : false;
+		} catch (err) {
+			// Ignore errors reading verify log config
 		}
 		
 		let responseMessage = `✅ **Moderation log channel set!**\n\n`;

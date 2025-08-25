@@ -34,8 +34,6 @@ async function getTwitchToken() {
     }
     
     try {
-        console.log('[CREATOR-ALERTS] Refreshing Twitch access token...');
-        
         const response = await fetch(TWITCH_TOKEN_URL, {
             method: 'POST',
             headers: {
@@ -56,7 +54,6 @@ async function getTwitchToken() {
         twitchAccessToken = data.access_token;
         twitchTokenExpiry = now + (data.expires_in * 1000) - 60000; // Expire 1 minute early
         
-        console.log('[CREATOR-ALERTS] Twitch token refreshed successfully');
         return twitchAccessToken;
     } catch (error) {
         console.error('[CREATOR-ALERTS] Error refreshing Twitch token:', error);

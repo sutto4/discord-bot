@@ -461,11 +461,62 @@ module.exports = function startServer(client) {
     try {
       const guildId = req.params.guildId;
       
-      // For now, return empty array since we need to implement actual group logic
-      // This should be replaced with actual database queries to fetch grouped guilds
-      const guilds = [];
+      // Get the group ID for this guild
+      const [guildRows] = await appDb.query(
+        "SELECT group_id FROM guilds WHERE guild_id = ?",
+        [guildId]
+      );
       
-      res.json({ guilds });
+      if (guildRows.length === 0 || !guildRows[0].group_id) {
+        return res.json({ guilds: [] });
+      }
+      
+      const groupId = guildRows[0].group_id;
+      
+      // Get all guilds in the same group
+      const [groupGuilds] = await appDb.query(`
+        SELECT 
+          g.guild_id,
+          g.guild_name,
+          g.member_count,
+          g.premium
+        FROM guilds g
+        WHERE g.group_id = ? AND g.guild_id != ?
+      `, [groupId, guildId]);
+      
+      // Get Discord guild objects for each grouped guild
+      const guildsWithChannels = await Promise.all(groupGuilds.map(async (guildRow) => {
+        try {
+          const guild = await client.guilds.fetch(guildRow.guild_id);
+          
+          // Get channels for this guild
+          const channels = guild.channels.cache
+            .filter(channel => channel.type === 0) // Text channels only
+            .map(channel => ({
+              id: channel.id,
+              name: channel.name,
+              type: channel.type,
+              position: channel.position
+            }))
+            .sort((a, b) => a.position - b.position);
+          
+          return {
+            id: guildRow.guild_id,
+            name: guildRow.guild_name || guild.name,
+            memberCount: guildRow.member_count || guild.memberCount || 0,
+            premium: Boolean(guildRow.premium),
+            channels: channels
+          };
+        } catch (err) {
+          console.warn(`Could not fetch guild ${guildRow.guild_id}:`, err.message);
+          return null;
+        }
+      }));
+      
+      // Filter out any failed guilds
+      const validGuilds = guildsWithChannels.filter(g => g !== null);
+      
+      res.json({ guilds: validGuilds });
     } catch (err) {
       console.error("guilds endpoint error", err);
       res.status(500).json({ error: err.message });
@@ -477,11 +528,78 @@ module.exports = function startServer(client) {
     try {
       const guildId = req.params.guildId;
       
-      // For now, return empty array since we need to implement actual group logic
-      // This should be replaced with actual database queries to fetch groups
-      const groups = [];
+      // Get the group information for this guild
+      const [groupRows] = await appDb.query(`
+        SELECT 
+          sg.id,
+          sg.name,
+          sg.description,
+          sg.created_at,
+          sg.updated_at
+        FROM server_groups sg
+        INNER JOIN guilds g ON g.group_id = sg.id
+        WHERE g.guild_id = ?
+      `, [guildId]);
       
-      res.json({ groups });
+      if (groupRows.length === 0) {
+        return res.json({ groups: [] });
+      }
+      
+      const group = groupRows[0];
+      
+      // Get all guilds in this group
+      const [groupGuilds] = await appDb.query(`
+        SELECT 
+          g.guild_id,
+          g.guild_name,
+          g.member_count,
+          g.premium
+        FROM guilds g
+        WHERE g.group_id = ?
+      `, [group.id]);
+      
+      // Get Discord guild objects and channels for each guild in the group
+      const guildsWithChannels = await Promise.all(groupGuilds.map(async (guildRow) => {
+        try {
+          const guild = await client.guilds.fetch(guildRow.guild_id);
+          
+          // Get channels for this guild
+          const channels = guild.channels.cache
+            .filter(channel => channel.type === 0) // Text channels only
+            .map(channel => ({
+              id: channel.id,
+              name: channel.name,
+              type: channel.type,
+              position: channel.position
+            }))
+            .sort((a, b) => a.position - b.position);
+          
+          return {
+            id: guildRow.guild_id,
+            name: guildRow.guild_name || guild.name,
+            memberCount: guildRow.member_count || guild.memberCount || 0,
+            premium: Boolean(guildRow.premium),
+            channels: channels
+          };
+        } catch (err) {
+          console.warn(`Could not fetch guild ${guildRow.guild_id}:`, err.message);
+          return null;
+        }
+      }));
+      
+      // Filter out any failed guilds
+      const validGuilds = guildsWithChannels.filter(g => g !== null);
+      
+      const groupWithGuilds = {
+        id: group.id,
+        name: group.name,
+        description: group.description,
+        created_at: group.created_at,
+        updated_at: group.updated_at,
+        guilds: validGuilds
+      };
+      
+      res.json({ groups: [groupWithGuilds] });
     } catch (err) {
       console.error("groups endpoint error", err);
       res.status(500).json({ error: err.message });

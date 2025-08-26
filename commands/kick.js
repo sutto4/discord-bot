@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } = require('discord.js');
 
 module.exports = {
 	data: new SlashCommandBuilder()
@@ -24,7 +24,7 @@ module.exports = {
 			if (!member.kickable) {
 				return interaction.reply({ 
 					content: '❌ I cannot kick this user. They may have higher permissions than me.', 
-					ephemeral: true 
+					flags: MessageFlags.Ephemeral
 				});
 			}
 
@@ -100,7 +100,7 @@ module.exports = {
 			console.error('Error kicking user:', error);
 			await interaction.reply({ 
 				content: '❌ An error occurred while trying to kick the user.', 
-				ephemeral: true 
+				flags: MessageFlags.Ephemeral
 			});
 		}
 	},

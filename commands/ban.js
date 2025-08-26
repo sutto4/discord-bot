@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } = require('discord.js');
 
 module.exports = {
 	data: new SlashCommandBuilder()
@@ -36,7 +36,7 @@ module.exports = {
 			if (!member.bannable) {
 				return interaction.reply({ 
 					content: '❌ I cannot ban this user. They may have higher permissions than me.', 
-					ephemeral: true 
+					flags: MessageFlags.Ephemeral
 				});
 			}
 
@@ -135,7 +135,7 @@ module.exports = {
 			console.error('Error banning user:', error);
 			await interaction.reply({ 
 				content: '❌ An error occurred while trying to ban the user.', 
-				ephemeral: true 
+				flags: MessageFlags.Ephemeral
 			});
 		}
 	},

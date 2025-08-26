@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } = require('discord.js');
 
 module.exports = {
 	data: new SlashCommandBuilder()
@@ -23,7 +23,7 @@ module.exports = {
 			if (!/^\d+$/.test(userId)) {
 				return interaction.reply({ 
 					content: '❌ Invalid user ID. Please provide a valid Discord user ID.', 
-					ephemeral: true 
+					flags: MessageFlags.Ephemeral
 				});
 			}
 
@@ -32,7 +32,7 @@ module.exports = {
 			if (!user) {
 				return interaction.reply({ 
 					content: '❌ User not found.', 
-					ephemeral: true 
+					flags: MessageFlags.Ephemeral
 				});
 			}
 
@@ -43,7 +43,7 @@ module.exports = {
 			if (!bannedUser) {
 				return interaction.reply({ 
 					content: '❌ This user is not banned.', 
-					ephemeral: true 
+					flags: MessageFlags.Ephemeral
 				});
 			}
 
@@ -117,7 +117,7 @@ module.exports = {
 			console.error('Error unbanning user:', error);
 			await interaction.reply({ 
 				content: '❌ An error occurred while trying to unban the user.', 
-				ephemeral: true 
+				flags: MessageFlags.Ephemeral
 			});
 		}
 	},

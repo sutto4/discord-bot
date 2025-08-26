@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 
 module.exports = {
 	data: new SlashCommandBuilder()
@@ -19,7 +19,7 @@ module.exports = {
 			if (!caseData) {
 				return interaction.reply({ 
 					content: '❌ Case not found.', 
-					ephemeral: true 
+					flags: MessageFlags.Ephemeral
 				});
 			}
 
@@ -45,13 +45,16 @@ module.exports = {
 				embed.addFields({ name: 'Expires', value: `<t:${Math.floor(new Date(caseData.expires_at).getTime() / 1000)}:R>`, inline: true });
 			}
 
-			await interaction.reply({ embeds: [embed] });
+			await interaction.reply({ 
+				embeds: [embed], 
+				flags: MessageFlags.Ephemeral
+			});
 
 		} catch (error) {
 			console.error('Error fetching case:', error);
 			await interaction.reply({ 
 				content: '❌ An error occurred while fetching the case.', 
-				ephemeral: true 
+				flags: MessageFlags.Ephemeral
 			});
 		}
 	},

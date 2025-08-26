@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } = require('discord.js');
 
 module.exports = {
 	data: new SlashCommandBuilder()
@@ -24,7 +24,7 @@ module.exports = {
 			if (!member.moderatable) {
 				return interaction.reply({ 
 					content: '❌ I cannot unmute this user. They may have higher permissions than me.', 
-					ephemeral: true 
+					flags: MessageFlags.Ephemeral
 				});
 			}
 
@@ -32,7 +32,7 @@ module.exports = {
 			if (!member.isCommunicationDisabled()) {
 				return interaction.reply({ 
 					content: '❌ This user is not currently timed out.', 
-					ephemeral: true 
+					flags: MessageFlags.Ephemeral
 				});
 			}
 
@@ -108,7 +108,7 @@ module.exports = {
 			console.error('Error unmuting user:', error);
 			await interaction.reply({ 
 				content: '❌ An error occurred while trying to unmute the user.', 
-				ephemeral: true 
+				flags: MessageFlags.Ephemeral
 			});
 		}
 	},

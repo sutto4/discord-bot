@@ -198,15 +198,15 @@ async function saveEmbeddedMessageConfig(guildId, config) {
       
       const configId = result.insertId;
       
-      // If multi-channel, insert into channels table
-      if (isMultiChannel) {
-        for (const channel of config.channels) {
-          await appDb.query(
-            "INSERT INTO embedded_message_channels (message_id, guild_id, channel_id, guild_name, channel_name) VALUES (?, ?, ?, ?, ?)",
-            [configId, channel.guildId, channel.channelId, channel.guildName, channel.channelName]
-          );
-        }
-      }
+             // If multi-channel, insert into channels table
+       if (isMultiChannel) {
+         for (const channel of config.channels) {
+           await appDb.query(
+             "INSERT INTO embedded_message_channels (message_id, guild_id, channel_id, guild_name, channel_name, discord_message_id) VALUES (?, ?, ?, ?, ?, ?)",
+             [configId, channel.guildId, channel.channelId, channel.guildName, channel.channelName, null]
+           );
+         }
+       }
       
       return configId;
     }
@@ -317,6 +317,13 @@ router.post('/', async (req, res) => {
           for (const channel of config.channels) {
             try {
               const sentMessage = await sendEmbeddedMessage(channel.guildId, { ...config, id: configId, channelId: channel.channelId });
+              
+              // Update the discord_message_id in the channels table
+              await appDb.query(
+                "UPDATE embedded_message_channels SET discord_message_id = ? WHERE message_id = ? AND channel_id = ?",
+                [sentMessage.id, configId, channel.channelId]
+              );
+              
               sentMessages.push({
                 guildId: channel.guildId,
                 channelId: channel.channelId,
@@ -329,6 +336,15 @@ router.post('/', async (req, res) => {
         } else {
           // Single-channel message
           const sentMessage = await sendEmbeddedMessage(guildId, { ...config, id: configId });
+          
+          // Update the discord_message_id in the channels table if this is a multi-channel message
+          if (config.channels && config.channels.length > 1) {
+            await appDb.query(
+              "UPDATE embedded_message_channels SET discord_message_id = ? WHERE message_id = ? AND channel_id = ?",
+              [sentMessage.id, configId, config.channelId]
+            );
+          }
+          
           sentMessages.push({
             guildId: guildId,
             channelId: config.channelId,

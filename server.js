@@ -456,6 +456,62 @@ module.exports = function startServer(client) {
     }
   });
 
+  // Guilds endpoint for embedded messages builder
+  app.get("/api/guilds/:guildId/guilds", async (req, res) => {
+    try {
+      const guildId = req.params.guildId;
+      
+      // For now, return empty array since we need to implement actual group logic
+      // This should be replaced with actual database queries to fetch grouped guilds
+      const guilds = [];
+      
+      res.json({ guilds });
+    } catch (err) {
+      console.error("guilds endpoint error", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Groups endpoint for embedded messages builder
+  app.get("/api/guilds/:guildId/groups", async (req, res) => {
+    try {
+      const guildId = req.params.guildId;
+      
+      // For now, return empty array since we need to implement actual group logic
+      // This should be replaced with actual database queries to fetch groups
+      const groups = [];
+      
+      res.json({ groups });
+    } catch (err) {
+      console.error("groups endpoint error", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Channels endpoint for embedded messages builder
+  app.get("/api/guilds/:guildId/channels", async (req, res) => {
+    try {
+      const guildId = req.params.guildId;
+      const guild = await client.guilds.fetch(guildId);
+      
+      // Fetch all channels
+      const channels = guild.channels.cache
+        .filter(channel => channel.type === 0) // Text channels only
+        .map(channel => ({
+          id: channel.id,
+          name: channel.name,
+          type: channel.type,
+          position: channel.position
+        }))
+        .sort((a, b) => a.position - b.position);
+      
+      res.json({ channels });
+    } catch (err) {
+      console.error("channels endpoint error", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Add role to user (actor accepted as query ?actor=ID)
   app.post("/api/guilds/:guildId/members/:userId/roles/:roleId", async (req, res) => {
     try {

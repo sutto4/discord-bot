@@ -51,25 +51,46 @@ module.exports = {
 				expiresAt: null
 			});
 
-			// Create embed
-			const embed = new EmbedBuilder()
+			// Try to DM the warned user
+			try {
+				const dmEmbed = new EmbedBuilder()
+					.setColor('#FFD700')
+					.setTitle('⚠️ You have been warned')
+					.setDescription(`You have been warned in **${interaction.guild.name}**`)
+					.addFields(
+						{ name: 'Reason', value: reason, inline: false },
+						{ name: 'Moderator', value: interaction.user.tag, inline: true },
+						{ name: 'Case ID', value: caseId, inline: true }
+					)
+					.setThumbnail(user.displayAvatarURL())
+					.setTimestamp();
+
+				await user.send({ embeds: [dmEmbed] });
+			} catch (dmError) {
+				// User has DMs disabled, ignore
+			}
+
+			// Send ephemeral reply to the command user (only they can see it)
+			const replyEmbed = new EmbedBuilder()
 				.setColor('#FFD700')
-				.setTitle('⚠️ User Warned')
-				.setDescription(`**User:** ${user.tag} (${user.id})`)
+				.setTitle('✅ Warning Sent')
+				.setDescription(`**${user.tag}** has been warned`)
 				.addFields(
 					{ name: 'Reason', value: reason, inline: true },
-					{ name: 'Moderator', value: interaction.user.tag, inline: true },
 					{ name: 'Case ID', value: caseId, inline: true }
 				)
 				.setTimestamp();
 
-			await interaction.reply({ embeds: [embed] });
+			await interaction.reply({ 
+				embeds: [replyEmbed], 
+				flags: MessageFlags.Ephemeral
+			});
 
 		} catch (error) {
 			console.error('Error warning user:', error);
 			await interaction.reply({ 
 				content: '❌ An error occurred while trying to warn the user.', 
-				ephemeral: true 
+				flags: MessageFlags.Ephemeral
 			});
 		}
 	},

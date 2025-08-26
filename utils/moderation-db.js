@@ -246,3 +246,4 @@ class ModerationDatabase {
 }
 
 module.exports = ModerationDatabase;
+

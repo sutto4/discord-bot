@@ -10,6 +10,45 @@ const createdByCache = new Map();
 function isId(v) { return /^[0-9]{1,20}$/.test(String(v)); }
 
 /**
+ * Build an embed from configuration
+ */
+function buildEmbed(config) {
+  const embed = new EmbedBuilder();
+  
+  if (config.title) embed.setTitle(config.title);
+  if (config.description) embed.setDescription(config.description);
+  if (config.color) embed.setColor(config.color);
+  if (config.imageUrl) embed.setImage(config.imageUrl);
+  if (config.thumbnailUrl) embed.setThumbnail(config.thumbnailUrl);
+  
+  // Handle both nested and flat author format
+  const authorName = config.author?.name || config.authorName;
+  const authorIconUrl = config.author?.iconUrl || config.authorIconUrl;
+  if (authorName) {
+    embed.setAuthor({
+      name: authorName,
+      iconURL: authorIconUrl || undefined
+    });
+  }
+  
+  // Handle both nested and flat footer format
+  const footerText = config.footer?.text || config.footerText;
+  const footerIconUrl = config.footer?.iconUrl || config.footerIconUrl;
+  if (footerText) {
+    embed.setFooter({
+      text: footerText,
+      iconURL: footerIconUrl || undefined
+    });
+  }
+  
+  if (config.timestamp) {
+    embed.setTimestamp(config.timestamp);
+  }
+  
+  return embed;
+}
+
+/**
  * Fetch embedded message configurations for a guild
  */
 async function getEmbeddedMessageConfigs(guildId) {
@@ -134,8 +173,8 @@ async function saveEmbeddedMessageConfig(guildId, config) {
         // Insert new channels
         for (const channel of config.channels) {
           await appDb.query(
-            "INSERT INTO embedded_message_channels (message_id, guild_id, channel_id, guild_name, channel_name) VALUES (?, ?, ?, ?, ?)",
-            [config.id, channel.guildId, channel.channelId, channel.guildName, channel.channelName]
+            "INSERT INTO embedded_message_channels (message_id, guild_id, channel_id, guild_name, channel_name, discord_message_id) VALUES (?, ?, ?, ?, ?, ?)",
+            [config.id, channel.guildId, channel.channelId, channel.guildName, channel.channelName, null]
           );
         }
       }
@@ -221,38 +260,7 @@ async function sendEmbeddedMessage(guildId, config) {
       throw new Error('Invalid channel or channel is not text-based');
     }
 
-    const embed = new EmbedBuilder();
-    
-    if (config.title) embed.setTitle(config.title);
-    if (config.description) embed.setDescription(config.description);
-    if (config.color) embed.setColor(config.color);
-    if (config.imageUrl) embed.setImage(config.imageUrl);
-    if (config.thumbnailUrl) embed.setThumbnail(config.thumbnailUrl);
-    
-    // Handle both nested and flat author format
-    const authorName = config.author?.name || config.authorName;
-    const authorIconUrl = config.author?.iconUrl || config.authorIconUrl;
-    if (authorName) {
-      embed.setAuthor({
-        name: authorName,
-        iconURL: authorIconUrl || undefined
-      });
-    }
-    
-    // Handle both nested and flat footer format
-    const footerText = config.footer?.text || config.footerText;
-    const footerIconUrl = config.footer?.iconUrl || config.footerIconUrl;
-    if (footerText) {
-      embed.setFooter({
-        text: footerText,
-        iconURL: footerIconUrl || undefined
-      });
-    }
-    
-    if (config.timestamp) {
-      embed.setTimestamp(config.timestamp);
-    }
-
+    const embed = buildEmbed(config);
     const message = await channel.send({ embeds: [embed] });
     
     // Store who created this message
@@ -388,20 +396,26 @@ router.put('/:id', async (req, res) => {
     
     const existingConfig = Array.isArray(existingRows) && existingRows[0];
     
-    // If enabled and we have an existing message, delete it first
+    // For multi-channel messages, we need to handle editing differently
     if (config.enabled && existingConfig && existingConfig.message_id) {
-      try {
-        const guild = await client.guilds.fetch(guildId);
-        const channel = await guild.channels.fetch(String(existingConfig.channel_id));
-        if (channel && channel.isTextBased()) {
-          const oldMessage = await channel.messages.fetch(existingConfig.message_id).catch(() => null);
-          if (oldMessage) {
-            await oldMessage.delete().catch(() => {});
-            console.log(`🗑️ Deleted old Discord message ${existingConfig.message_id} when updating`);
+      if (config.channels && config.channels.length > 1) {
+        // Multi-channel message - we'll edit existing messages if possible, or send new ones
+        console.log(`🔄 Multi-channel update: will edit existing messages or send new ones`);
+      } else {
+        // Single-channel message - delete old message to replace with new one
+        try {
+          const guild = await client.guilds.fetch(guildId);
+          const channel = await guild.channels.fetch(String(existingConfig.channel_id));
+          if (channel && channel.isTextBased()) {
+            const oldMessage = await channel.messages.fetch(existingConfig.message_id).catch(() => null);
+            if (oldMessage) {
+              await oldMessage.delete().catch(() => {});
+              console.log(`🗑️ Deleted old Discord message ${existingConfig.message_id} when updating`);
+            }
           }
+        } catch (discordError) {
+          console.log(`⚠️ Failed to delete old Discord message: ${discordError.message}`);
         }
-      } catch (discordError) {
-        console.log(`⚠️ Failed to delete old Discord message: ${discordError.message}`);
       }
     }
 
@@ -414,14 +428,62 @@ router.put('/:id', async (req, res) => {
         let sentMessages = [];
         
         if (config.channels && config.channels.length > 1) {
-          // Multi-channel message - send to all channels
+          // Multi-channel message - try to edit existing messages or send new ones
           for (const channel of config.channels) {
             try {
+              // Check if we have an existing message in this channel
+              const [existingChannelRows] = await appDb.query(
+                "SELECT discord_message_id FROM embedded_message_channels WHERE message_id = ? AND channel_id = ?",
+                [configId, channel.channelId]
+              );
+              
+              if (existingChannelRows.length > 0 && existingChannelRows[0].discord_message_id) {
+                // Try to edit existing message
+                try {
+                  const guild = await client.guilds.fetch(channel.guildId);
+                  const discordChannel = await guild.channels.fetch(channel.channelId);
+                  if (discordChannel && discordChannel.isTextBased()) {
+                    const existingMessage = await discordChannel.messages.fetch(existingChannelRows[0].discord_message_id).catch(() => null);
+                    if (existingMessage) {
+                      // Edit the existing message
+                      const embed = buildEmbed(config);
+                      await existingMessage.edit({ embeds: [embed] });
+                      console.log(`✏️ Edited existing message ${existingChannelRows[0].discord_message_id} in channel ${channel.channelId}`);
+                      
+                      // Update the discord_message_id in the channels table
+                      await appDb.query(
+                        "UPDATE embedded_message_channels SET discord_message_id = ? WHERE message_id = ? AND channel_id = ?",
+                        [existingMessage.id, configId, channel.channelId]
+                      );
+                      
+                      sentMessages.push({
+                        guildId: channel.guildId,
+                        channelId: channel.channelId,
+                        messageId: existingChannelRows[0].discord_message_id,
+                        edited: true
+                      });
+                      continue; // Skip to next channel
+                    }
+                  }
+                } catch (editError) {
+                  console.log(`⚠️ Failed to edit message in channel ${channel.channelId}, will send new one:`, editError.message);
+                }
+              }
+              
+              // Send new message if editing failed or no existing message
               const sentMessage = await sendEmbeddedMessage(channel.guildId, { ...config, id: configId, channelId: channel.channelId });
+              
+              // Update the discord_message_id in the channels table
+              await appDb.query(
+                "UPDATE embedded_message_channels SET discord_message_id = ? WHERE message_id = ? AND channel_id = ?",
+                [sentMessage.id, configId, channel.channelId]
+              );
+              
               sentMessages.push({
                 guildId: channel.guildId,
                 channelId: channel.channelId,
-                messageId: sentMessage.id
+                messageId: sentMessage.id,
+                edited: false
               });
             } catch (channelError) {
               console.error(`Failed to send to channel ${channel.channelId}:`, channelError.message);
@@ -444,11 +506,24 @@ router.put('/:id', async (req, res) => {
             [sentMessages[0].messageId, configId, guildId]
           );
           
+          const editedCount = sentMessages.filter(m => m.edited).length;
+          const newCount = sentMessages.filter(m => !m.edited).length;
+          
+          let messageText = `Configuration updated successfully! `;
+          if (editedCount > 0) {
+            messageText += `Edited ${editedCount} existing message${editedCount > 1 ? 's' : ''}`;
+          }
+          if (newCount > 0) {
+            if (editedCount > 0) messageText += ` and `;
+            messageText += `sent ${newCount} new message${newCount > 1 ? 's' : ''}`;
+          }
+          messageText += ` to ${sentMessages.length} channel${sentMessages.length > 1 ? 's' : ''}`;
+          
           res.json({ 
             success: true, 
             id: configId, 
             messageId: sentMessages[0].messageId,
-            message: `Configuration updated and new message published to ${sentMessages.length} channel${sentMessages.length > 1 ? 's' : ''}`,
+            message: messageText,
             sentMessages: sentMessages
           });
         } else {

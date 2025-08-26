@@ -93,7 +93,7 @@ module.exports = {
 		// Save the moderation log channel
 		const success = await saveModLogChannel(interaction.guild.id, channel.id);
 		
-		if (!success) {
+		if (!success) 
 			return interaction.reply({
 				content: '❌ Failed to save moderation log channel. Please try again.',
 				flags: MessageFlags.Ephemeral

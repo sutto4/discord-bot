@@ -20,30 +20,76 @@ async function getEmbeddedMessageConfigs(guildId) {
     );
     console.log('🔍 Fetched embedded message configs:', rows.map(r => ({ id: r.id, channelId: r.channel_id, createdBy: r.created_by })));
     
-         // Transform database snake_case to frontend camelCase
-     return rows.map(row => ({
-       id: row.id,
-       channelId: row.channel_id,
-       messageId: row.message_id,
-       title: row.title,
-       description: row.description,
-       color: row.color,
-       imageUrl: row.image_url,
-       thumbnailUrl: row.thumbnail_url,
-       author: row.author_name || row.author_icon_url ? {
-         name: row.author_name,
-         iconUrl: row.author_icon_url
-       } : null,
-       footer: row.footer_text || row.footer_icon_url ? {
-         text: row.footer_text,
-         iconUrl: row.footer_icon_url
-       } : null,
-       timestamp: row.timestamp,
-       enabled: row.enabled === 1,
-       createdBy: row.created_by,
-       createdAt: row.created_at,
-       updatedAt: row.updated_at
-     }));
+    // Transform database snake_case to frontend camelCase and add multi-channel support
+    const configs = await Promise.all(rows.map(async (row) => {
+      // Check if this is a multi-channel message
+      if (row.multi_channel) {
+        // Fetch all channels for this message
+        const [channelRows] = await appDb.query(
+          "SELECT guild_id, channel_id, guild_name, channel_name FROM embedded_message_channels WHERE message_id = ?",
+          [row.id]
+        );
+        
+        return {
+          id: row.id,
+          channelId: row.channel_id, // Keep for backward compatibility
+          messageId: row.message_id,
+          title: row.title,
+          description: row.description,
+          color: row.color,
+          imageUrl: row.image_url,
+          thumbnailUrl: row.thumbnail_url,
+          author: row.author_name || row.author_icon_url ? {
+            name: row.author_name,
+            iconUrl: row.author_icon_url
+          } : null,
+          footer: row.footer_text || row.footer_icon_url ? {
+            text: row.footer_text,
+            iconUrl: row.footer_icon_url
+          } : null,
+          timestamp: row.timestamp,
+          enabled: row.enabled === 1,
+          createdBy: row.created_by,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          multiChannel: true,
+          channels: channelRows.map(ch => ({
+            guildId: ch.guild_id,
+            channelId: ch.channel_id,
+            guildName: ch.guild_name,
+            channelName: ch.channel_name
+          }))
+        };
+      } else {
+        // Single-channel message (backward compatibility)
+        return {
+          id: row.id,
+          channelId: row.channel_id,
+          messageId: row.message_id,
+          title: row.title,
+          description: row.description,
+          color: row.color,
+          imageUrl: row.image_url,
+          thumbnailUrl: row.thumbnail_url,
+          author: row.author_name || row.author_icon_url ? {
+            name: row.author_name,
+            iconUrl: row.author_icon_url
+          } : null,
+          footer: row.footer_text || row.footer_icon_url ? {
+            text: row.footer_text,
+            iconUrl: row.footer_icon_url
+          } : null,
+          timestamp: row.timestamp,
+          enabled: row.enabled === 1,
+          createdBy: row.created_by,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          multiChannel: false
+        };
+      }
+    }));
+    
+    return configs;
   } catch (error) {
     console.error('Error fetching embedded message configs:', error);
     return [];
@@ -61,21 +107,39 @@ async function saveEmbeddedMessageConfig(guildId, config) {
     const footerText = config.footer?.text || config.footerText;
     const footerIconUrl = config.footer?.iconUrl || config.footerIconUrl;
     
+    // Check if this is a multi-channel message
+    const isMultiChannel = config.channels && config.channels.length > 1;
+    
     if (config.id && isId(config.id)) {
       // Update existing
       await appDb.query(
         `UPDATE embedded_messages SET 
           channel_id = ?, message_id = ?, title = ?, description = ?, color = ?, 
           image_url = ?, thumbnail_url = ?, author_name = ?, author_icon_url = ?, 
-          footer_text = ?, footer_icon_url = ?, timestamp = ?, enabled = ?, updated_at = NOW()
+          footer_text = ?, footer_icon_url = ?, timestamp = ?, enabled = ?, multi_channel = ?, updated_at = NOW()
           WHERE id = ? AND guild_id = ?`,
         [
           config.channelId, config.messageId, config.title, config.description, config.color,
           config.imageUrl, config.thumbnailUrl, authorName, authorIconUrl,
           footerText, footerIconUrl, config.timestamp, config.enabled !== false ? 1 : 0,
-          config.id, guildId
+          isMultiChannel ? 1 : 0, config.id, guildId
         ]
       );
+      
+      // If multi-channel, update the channels table
+      if (isMultiChannel) {
+        // Clear existing channels
+        await appDb.query("DELETE FROM embedded_message_channels WHERE message_id = ?", [config.id]);
+        
+        // Insert new channels
+        for (const channel of config.channels) {
+          await appDb.query(
+            "INSERT INTO embedded_message_channels (message_id, guild_id, channel_id, guild_name, channel_name) VALUES (?, ?, ?, ?, ?)",
+            [config.id, channel.guildId, channel.channelId, channel.guildName, channel.channelName]
+          );
+        }
+      }
+      
       return config.id;
     } else {
       // Create new
@@ -83,16 +147,29 @@ async function saveEmbeddedMessageConfig(guildId, config) {
         `INSERT INTO embedded_messages (
           guild_id, channel_id, message_id, title, description, color, 
           image_url, thumbnail_url, author_name, author_icon_url, 
-          footer_text, footer_icon_url, timestamp, enabled, created_by, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+          footer_text, footer_icon_url, timestamp, enabled, multi_channel, created_by, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
         [
           guildId, config.channelId, config.messageId, config.title, config.description, config.color,
           config.imageUrl, config.thumbnailUrl, authorName, authorIconUrl,
           footerText, footerIconUrl, config.timestamp, config.enabled !== false ? 1 : 0,
-          config.createdBy || 'ServerMate Bot'
+          isMultiChannel ? 1 : 0, config.createdBy || 'ServerMate Bot'
         ]
       );
-      return result.insertId;
+      
+      const configId = result.insertId;
+      
+      // If multi-channel, insert into channels table
+      if (isMultiChannel) {
+        for (const channel of config.channels) {
+          await appDb.query(
+            "INSERT INTO embedded_message_channels (message_id, guild_id, channel_id, guild_name, channel_name) VALUES (?, ?, ?, ?, ?)",
+            [configId, channel.guildId, channel.channelId, channel.guildName, channel.channelName]
+          );
+        }
+      }
+      
+      return configId;
     }
   } catch (error) {
     console.error('Error saving embedded message config:', error);
@@ -222,23 +299,56 @@ router.post('/', async (req, res) => {
     // Save the configuration first (without message_id)
     const configId = await saveEmbeddedMessageConfig(guildId, config);
     
-    // If enabled, send the message
+    // If enabled, send the message to all channels
     if (config.enabled) {
       try {
-        const sentMessage = await sendEmbeddedMessage(guildId, { ...config, id: configId });
+        let sentMessages = [];
         
-        // Update the configuration with the Discord message ID
-        await appDb.query(
-          `UPDATE embedded_messages SET message_id = ? WHERE id = ? AND guild_id = ?`,
-          [sentMessage.id, configId, guildId]
-        );
+        if (config.channels && config.channels.length > 1) {
+          // Multi-channel message - send to all channels
+          for (const channel of config.channels) {
+            try {
+              const sentMessage = await sendEmbeddedMessage(channel.guildId, { ...config, id: configId, channelId: channel.channelId });
+              sentMessages.push({
+                guildId: channel.guildId,
+                channelId: channel.channelId,
+                messageId: sentMessage.id
+              });
+            } catch (channelError) {
+              console.error(`Failed to send to channel ${channel.channelId}:`, channelError.message);
+            }
+          }
+        } else {
+          // Single-channel message
+          const sentMessage = await sendEmbeddedMessage(guildId, { ...config, id: configId });
+          sentMessages.push({
+            guildId: guildId,
+            channelId: config.channelId,
+            messageId: sentMessage.id
+          });
+        }
         
-        res.json({ 
-          success: true, 
-          id: configId, 
-          messageId: sentMessage.id,
-          message: 'Embedded message published successfully' 
-        });
+        if (sentMessages.length > 0) {
+          // Update the configuration with the first Discord message ID for backward compatibility
+          await appDb.query(
+            `UPDATE embedded_messages SET message_id = ? WHERE id = ? AND guild_id = ?`,
+            [sentMessages[0].messageId, configId, guildId]
+          );
+          
+          res.json({ 
+            success: true, 
+            id: configId, 
+            messageId: sentMessages[0].messageId,
+            message: `Embedded message published to ${sentMessages.length} channel${sentMessages.length > 1 ? 's' : ''}`,
+            sentMessages: sentMessages
+          });
+        } else {
+          res.json({ 
+            success: true, 
+            id: configId, 
+            warning: 'Configuration saved but failed to send to any channels' 
+          });
+        }
       } catch (sendError) {
         // Message saved but failed to send
         res.json({ 
@@ -298,23 +408,56 @@ router.put('/:id', async (req, res) => {
     config.id = id;
     const configId = await saveEmbeddedMessageConfig(guildId, config);
     
-    // If enabled, send new message and update message_id
+    // If enabled, send new message to all channels and update message_id
     if (config.enabled) {
       try {
-        const sentMessage = await sendEmbeddedMessage(guildId, { ...config, id: configId });
+        let sentMessages = [];
         
-        // Update the configuration with the new Discord message ID
-        await appDb.query(
-          `UPDATE embedded_messages SET message_id = ? WHERE id = ? AND guild_id = ?`,
-          [sentMessage.id, configId, guildId]
-        );
+        if (config.channels && config.channels.length > 1) {
+          // Multi-channel message - send to all channels
+          for (const channel of config.channels) {
+            try {
+              const sentMessage = await sendEmbeddedMessage(channel.guildId, { ...config, id: configId, channelId: channel.channelId });
+              sentMessages.push({
+                guildId: channel.guildId,
+                channelId: channel.channelId,
+                messageId: sentMessage.id
+              });
+            } catch (channelError) {
+              console.error(`Failed to send to channel ${channel.channelId}:`, channelError.message);
+            }
+          }
+        } else {
+          // Single-channel message
+          const sentMessage = await sendEmbeddedMessage(guildId, { ...config, id: configId });
+          sentMessages.push({
+            guildId: guildId,
+            channelId: config.channelId,
+            messageId: sentMessage.id
+          });
+        }
         
-        res.json({ 
-          success: true, 
-          id: configId, 
-          messageId: sentMessage.id,
-          message: 'Configuration updated and new message published successfully' 
-        });
+        if (sentMessages.length > 0) {
+          // Update the configuration with the first Discord message ID for backward compatibility
+          await appDb.query(
+            `UPDATE embedded_messages SET message_id = ? WHERE id = ? AND guild_id = ?`,
+            [sentMessages[0].messageId, configId, guildId]
+          );
+          
+          res.json({ 
+            success: true, 
+            id: configId, 
+            messageId: sentMessages[0].messageId,
+            message: `Configuration updated and new message published to ${sentMessages.length} channel${sentMessages.length > 1 ? 's' : ''}`,
+            sentMessages: sentMessages
+          });
+        } else {
+          res.json({ 
+            success: true, 
+            id: configId, 
+            warning: 'Configuration updated but failed to send to any channels' 
+          });
+        }
       } catch (sendError) {
         res.json({ 
           success: true, 
@@ -379,7 +522,7 @@ router.delete('/:id', async (req, res) => {
       }
     }
 
-    // Delete from database
+    // Delete from database (this will cascade to embedded_message_channels due to foreign key)
     await deleteEmbeddedMessageConfig(guildId, id);
     
     res.json({ 

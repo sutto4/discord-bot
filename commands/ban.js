@@ -87,25 +87,6 @@ module.exports = {
 				expiresAt: durationMs ? new Date(Date.now() + durationMs) : null
 			});
 
-			// Create embed
-			const embed = new EmbedBuilder()
-				.setColor('#FF0000')
-				.setTitle('🔨 User Banned')
-				.setDescription(`**User:** ${user.tag} (${user.id})`)
-				.setThumbnail(user.displayAvatarURL())
-				.addFields(
-					{ name: 'Reason', value: reason, inline: true },
-					{ name: 'Moderator', value: interaction.user.tag, inline: true },
-					{ name: 'Case ID', value: caseId, inline: true }
-				)
-				.setTimestamp();
-
-			if (durationLabel) {
-				embed.addFields({ name: 'Duration', value: durationLabel, inline: true });
-			}
-
-			await interaction.reply({ embeds: [embed] });
-
 			// Try to DM the banned user
 			try {
 				const dmEmbed = new EmbedBuilder()
@@ -113,15 +94,42 @@ module.exports = {
 					.setTitle('🔨 You have been banned')
 					.setDescription(`You have been banned from **${interaction.guild.name}**`)
 					.addFields(
-						{ name: 'Reason', value: reason, inline: true },
-						{ name: 'Duration', value: durationLabel || 'Permanent', inline: true }
+						{ name: 'Reason', value: reason, inline: false },
+						{ name: 'Moderator', value: interaction.user.tag, inline: true }
 					)
+					.setThumbnail(user.displayAvatarURL())
 					.setTimestamp();
+
+				if (durationLabel) {
+					dmEmbed.addFields({ name: 'Duration', value: durationLabel, inline: true });
+				}
 
 				await user.send({ embeds: [dmEmbed] });
 			} catch (dmError) {
 				// User has DMs disabled, ignore
 			}
+
+			// Send ephemeral reply to the command user (only they can see it)
+			const replyEmbed = new EmbedBuilder()
+				.setColor('#FF0000')
+				.setTitle('✅ User Banned')
+				.setDescription(`**${user.tag}** has been banned`)
+				.addFields(
+					{ name: 'Reason', value: reason, inline: true },
+					{ name: 'Case ID', value: caseId, inline: true }
+				)
+				.setTimestamp();
+
+			if (durationLabel) {
+				replyEmbed.addFields({ name: 'Duration', value: durationLabel, inline: true });
+			}
+
+			await interaction.reply({ 
+				embeds: [replyEmbed], 
+				flags: MessageFlags.Ephemeral
+			});
+
+
 
 		} catch (error) {
 			console.error('Error banning user:', error);

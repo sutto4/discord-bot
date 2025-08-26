@@ -83,23 +83,6 @@ module.exports = {
 				expiresAt: new Date(Date.now() + parsed.ms)
 			});
 
-			// Create embed
-			const embed = new EmbedBuilder()
-				.setColor('#FFA500')
-				.setTitle('🔇 User Muted')
-				.setDescription(`**User:** ${user.tag} (${user.id})`)
-				.setThumbnail(user.displayAvatarURL())
-				.addFields(
-					{ name: 'Reason', value: reason, inline: true },
-					{ name: 'Duration', value: parsed.label, inline: true },
-					{ name: 'Moderator', value: interaction.user.tag, inline: true },
-					{ name: 'Case ID', value: caseId, inline: true },
-					{ name: 'Expires', value: `<t:${Math.floor((Date.now() + parsed.ms) / 1000)}:R>`, inline: true }
-				)
-				.setTimestamp();
-
-			await interaction.reply({ embeds: [embed] });
-
 			// Try to DM the muted user
 			try {
 				const dmEmbed = new EmbedBuilder()
@@ -107,16 +90,38 @@ module.exports = {
 					.setTitle('🔇 You have been muted')
 					.setDescription(`You have been muted in **${interaction.guild.name}**`)
 					.addFields(
-						{ name: 'Reason', value: reason, inline: true },
+						{ name: 'Reason', value: reason, inline: false },
 						{ name: 'Duration', value: parsed.label, inline: true },
+						{ name: 'Moderator', value: interaction.user.tag, inline: true },
 						{ name: 'Expires', value: `<t:${Math.floor((Date.now() + parsed.ms) / 1000)}:R>`, inline: true }
 					)
+					.setThumbnail(user.displayAvatarURL())
 					.setTimestamp();
 
 				await user.send({ embeds: [dmEmbed] });
 			} catch (dmError) {
 				// User has DMs disabled, ignore
 			}
+
+			// Send ephemeral reply to the command user (only they can see it)
+			const replyEmbed = new EmbedBuilder()
+				.setColor('#FFA500')
+				.setTitle('✅ User Muted')
+				.setDescription(`**${user.tag}** has been muted`)
+				.addFields(
+					{ name: 'Reason', value: reason, inline: true },
+					{ name: 'Duration', value: parsed.label, inline: true },
+					{ name: 'Case ID', value: caseId, inline: true },
+					{ name: 'Expires', value: `<t:${Math.floor((Date.now() + parsed.ms) / 1000)}:R>`, inline: true }
+				)
+				.setTimestamp();
+
+			await interaction.reply({ 
+				embeds: [replyEmbed], 
+				flags: MessageFlags.Ephemeral
+			});
+
+
 
 		} catch (error) {
 			console.error('Error muting user:', error);

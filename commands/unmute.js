@@ -68,21 +68,6 @@ module.exports = {
 				expiresAt: null
 			});
 
-			// Create embed
-			const embed = new EmbedBuilder()
-				.setColor('#0000FF')
-				.setTitle('🔊 User Unmuted')
-				.setDescription(`**User:** ${user.tag} (${user.id})`)
-				.setThumbnail(user.displayAvatarURL())
-				.addFields(
-					{ name: 'Reason', value: reason, inline: true },
-					{ name: 'Moderator', value: interaction.user.tag, inline: true },
-					{ name: 'Case ID', value: caseId, inline: true }
-				)
-				.setTimestamp();
-
-			await interaction.reply({ embeds: [embed] });
-
 			// Try to DM the unmuted user
 			try {
 				const dmEmbed = new EmbedBuilder()
@@ -90,14 +75,34 @@ module.exports = {
 					.setTitle('🔊 Your timeout has been removed')
 					.setDescription(`Your timeout in **${interaction.guild.name}** has been removed`)
 					.addFields(
-						{ name: 'Reason', value: reason, inline: true }
+						{ name: 'Reason', value: reason, inline: false },
+						{ name: 'Moderator', value: interaction.user.tag, inline: true }
 					)
+					.setThumbnail(user.displayAvatarURL())
 					.setTimestamp();
 
 				await user.send({ embeds: [dmEmbed] });
 			} catch (dmError) {
 				// User has DMs disabled, ignore
 			}
+
+			// Send ephemeral reply to the command user (only they can see it)
+			const replyEmbed = new EmbedBuilder()
+				.setColor('#0000FF')
+				.setTitle('✅ User Unmuted')
+				.setDescription(`**${user.tag}** has been unmuted`)
+				.addFields(
+					{ name: 'Reason', value: reason, inline: true },
+					{ name: 'Case ID', value: caseId, inline: true }
+				)
+				.setTimestamp();
+
+			await interaction.reply({ 
+				embeds: [replyEmbed], 
+				flags: MessageFlags.Ephemeral
+			});
+
+
 
 		} catch (error) {
 			console.error('Error unmuting user:', error);

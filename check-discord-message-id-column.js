@@ -47,3 +47,5 @@ CREATE INDEX idx_discord_message_id ON embedded_message_channels(discord_message
 }
 
 checkColumn();
+
+

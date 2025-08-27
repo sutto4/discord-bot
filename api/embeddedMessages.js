@@ -165,19 +165,31 @@ async function saveEmbeddedMessageConfig(guildId, config) {
         ]
       );
       
-      // If multi-channel, update the channels table
-      if (isMultiChannel) {
-        // Clear existing channels
-        await appDb.query("DELETE FROM embedded_message_channels WHERE message_id = ?", [config.id]);
-        
-        // Insert new channels
-        for (const channel of config.channels) {
-          await appDb.query(
-            "INSERT INTO embedded_message_channels (message_id, guild_id, channel_id, guild_name, channel_name, discord_message_id) VALUES (?, ?, ?, ?, ?, ?)",
-            [config.id, channel.guildId, channel.channelId, channel.guildName, channel.channelName, null]
-          );
-        }
-      }
+             // If multi-channel, update the channels table
+       if (isMultiChannel) {
+         // Get existing Discord message IDs before clearing
+         const [existingChannels] = await appDb.query(
+           "SELECT channel_id, discord_message_id FROM embedded_message_channels WHERE message_id = ?",
+           [config.id]
+         );
+         
+         const existingMessageIds = new Map(
+           existingChannels.map(ch => [ch.channel_id, ch.discord_message_id])
+         );
+         
+         // Clear existing channels
+         await appDb.query("DELETE FROM embedded_message_channels WHERE message_id = ?", [config.id]);
+         
+         // Insert new channels, preserving existing Discord message IDs
+         for (const channel of config.channels) {
+           const existingDiscordMessageId = existingMessageIds.get(channel.channelId) || null;
+           console.log(`💾 Preserving discord_message_id for channel ${channel.channelId}: ${existingDiscordMessageId || 'null'}`);
+           await appDb.query(
+             "INSERT INTO embedded_message_channels (message_id, guild_id, channel_id, guild_name, channel_name, discord_message_id) VALUES (?, ?, ?, ?, ?, ?)",
+             [config.id, channel.guildId, channel.channelId, channel.guildName, channel.channelName, existingDiscordMessageId]
+           );
+         }
+       }
       
       return config.id;
     } else {
@@ -452,6 +464,8 @@ router.put('/:id', async (req, res) => {
                 "SELECT discord_message_id FROM embedded_message_channels WHERE message_id = ? AND channel_id = ?",
                 [configId, channel.channelId]
               );
+              
+              console.log(`🔍 Channel ${channel.channelId}: Found ${existingChannelRows.length} rows, discord_message_id: ${existingChannelRows[0]?.discord_message_id || 'null'}`);
               
               if (existingChannelRows.length > 0 && existingChannelRows[0].discord_message_id) {
                 // Try to edit existing message

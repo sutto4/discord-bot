@@ -457,7 +457,7 @@ module.exports = function startServer(client) {
   });
 
   // Guilds endpoint for embedded messages builder
-  app.get("/api/guilds/:guildId/guilds", async (req, res) => {
+  app.get("/guilds/:guildId/guilds", async (req, res) => {
     try {
       console.log("🔍 Guilds endpoint called with guildId:", req.params.guildId);
       const guildId = req.params.guildId;
@@ -543,7 +543,7 @@ module.exports = function startServer(client) {
   });
 
   // Groups endpoint for embedded messages builder
-  app.get("/api/guilds/:guildId/groups", async (req, res) => {
+  app.get("/guilds/:guildId/groups", async (req, res) => {
     try {
       const guildId = req.params.guildId;
       
@@ -632,7 +632,7 @@ module.exports = function startServer(client) {
   });
 
   // Channels endpoint for embedded messages builder
-  app.get("/api/guilds/:guildId/channels", async (req, res) => {
+  app.get("/guilds/:guildId/channels", async (req, res) => {
     try {
       const guildId = req.params.guildId;
       const guild = await client.guilds.fetch(guildId);

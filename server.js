@@ -459,21 +459,27 @@ module.exports = function startServer(client) {
   // Guilds endpoint for embedded messages builder
   app.get("/api/guilds/:guildId/guilds", async (req, res) => {
     try {
+      console.log("🔍 Guilds endpoint called with guildId:", req.params.guildId);
       const guildId = req.params.guildId;
       
       // Get the group ID for this guild
+      console.log("🔍 Querying database for group_id...");
       const [guildRows] = await appDb.query(
         "SELECT group_id FROM guilds WHERE guild_id = ?",
         [guildId]
       );
+      console.log("🔍 Database result:", guildRows);
       
       if (guildRows.length === 0 || !guildRows[0].group_id) {
+        console.log("🔍 No group found, returning empty array");
         return res.json({ guilds: [] });
       }
       
       const groupId = guildRows[0].group_id;
+      console.log("🔍 Found group_id:", groupId);
       
       // Get all guilds in the same group
+      console.log("🔍 Querying for guilds in group...");
       const [groupGuilds] = await appDb.query(`
         SELECT 
           g.guild_id,
@@ -483,10 +489,13 @@ module.exports = function startServer(client) {
         FROM guilds g
         WHERE g.group_id = ? AND g.guild_id != ?
       `, [groupId, guildId]);
+      console.log("🔍 Group guilds found:", groupGuilds.length);
       
       // Get Discord guild objects for each grouped guild
+      console.log("🔍 Fetching Discord guild objects...");
       const guildsWithChannels = await Promise.all(groupGuilds.map(async (guildRow) => {
         try {
+          console.log(`🔍 Fetching Discord guild: ${guildRow.guild_id}`);
           const guild = await client.guilds.fetch(guildRow.guild_id);
           
           // Get channels for this guild
@@ -500,6 +509,8 @@ module.exports = function startServer(client) {
             }))
             .sort((a, b) => a.position - b.position);
           
+          console.log(`✅ Successfully fetched guild ${guildRow.guild_id} with ${channels.length} channels`);
+          
           return {
             id: guildRow.guild_id,
             name: guildRow.guild_name || guild.name,
@@ -508,7 +519,7 @@ module.exports = function startServer(client) {
             channels: channels
           };
         } catch (err) {
-          console.warn(`Could not fetch guild ${guildRow.guild_id}:`, err.message);
+          console.warn(`⚠️ Could not fetch guild ${guildRow.guild_id}:`, err.message);
           // Return a fallback guild object instead of null
           return {
             id: guildRow.guild_id,
@@ -520,10 +531,12 @@ module.exports = function startServer(client) {
         }
       }));
       
+      console.log("🔍 Final result:", guildsWithChannels.length, "guilds");
       // No need to filter out failed guilds since we're providing fallbacks
       res.json({ guilds: guildsWithChannels });
     } catch (err) {
-      console.error("guilds endpoint error", err);
+      console.error("❌ Guilds endpoint error:", err);
+      console.error("❌ Error stack:", err.stack);
       // Return empty array instead of 500 error
       res.json({ guilds: [] });
     }

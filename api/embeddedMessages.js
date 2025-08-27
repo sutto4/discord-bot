@@ -53,23 +53,29 @@ function buildEmbed(config) {
  */
 async function getEmbeddedMessageConfigs(guildId) {
   try {
-    const [rows] = await appDb.query(
-      "SELECT * FROM embedded_messages WHERE guild_id = ? ORDER BY created_at DESC",
-      [guildId]
-    );
-    console.log('🔍 Fetched embedded message configs:', rows.map(r => ({ id: r.id, channelId: r.channel_id, createdBy: r.created_by })));
+    // Use JOIN to fetch all data in one query for better performance
+    const [rows] = await appDb.query(`
+      SELECT 
+        em.*,
+        emc.guild_id as channel_guild_id,
+        emc.channel_id as channel_channel_id,
+        emc.guild_name as channel_guild_name,
+        emc.channel_name as channel_channel_name
+      FROM embedded_messages em
+      LEFT JOIN embedded_message_channels emc ON em.id = emc.message_id
+      WHERE em.guild_id = ?
+      ORDER BY em.created_at DESC, emc.channel_id
+    `, [guildId]);
     
-    // Transform database snake_case to frontend camelCase and add multi-channel support
-    const configs = await Promise.all(rows.map(async (row) => {
-      // Check if this is a multi-channel message
-      if (row.multi_channel) {
-        // Fetch all channels for this message
-        const [channelRows] = await appDb.query(
-          "SELECT guild_id, channel_id, guild_name, channel_name FROM embedded_message_channels WHERE message_id = ?",
-          [row.id]
-        );
-        
-        return {
+    // Group by message ID to handle multi-channel messages
+    const messageMap = new Map();
+    
+    rows.forEach(row => {
+      const messageId = row.id;
+      
+      if (!messageMap.has(messageId)) {
+        // Create base message object
+        const baseMessage = {
           id: row.id,
           channelId: row.channel_id, // Keep for backward compatibility
           messageId: row.message_id,
@@ -91,44 +97,26 @@ async function getEmbeddedMessageConfigs(guildId) {
           createdBy: row.created_by,
           createdAt: row.created_at,
           updatedAt: row.updated_at,
-          multiChannel: true,
-          channels: channelRows.map(ch => ({
-            guildId: ch.guild_id,
-            channelId: ch.channel_id,
-            guildName: ch.guild_name,
-            channelName: ch.channel_name
-          }))
+          multiChannel: row.multi_channel === 1,
+          channels: []
         };
-      } else {
-        // Single-channel message (backward compatibility)
-        return {
-          id: row.id,
-          channelId: row.channel_id,
-          messageId: row.message_id,
-          title: row.title,
-          description: row.description,
-          color: row.color,
-          imageUrl: row.image_url,
-          thumbnailUrl: row.thumbnail_url,
-          author: row.author_name || row.author_icon_url ? {
-            name: row.author_name,
-            iconUrl: row.author_icon_url
-          } : null,
-          footer: row.footer_text || row.footer_icon_url ? {
-            text: row.footer_text,
-            iconUrl: row.footer_icon_url
-          } : null,
-          timestamp: row.timestamp,
-          enabled: row.enabled === 1,
-          createdBy: row.created_by,
-          createdAt: row.created_at,
-          updatedAt: row.updated_at,
-          multiChannel: false
-        };
+        
+        messageMap.set(messageId, baseMessage);
       }
-    }));
+      
+      // Add channel information if this is a multi-channel message
+      if (row.multi_channel === 1 && row.channel_guild_id) {
+        const message = messageMap.get(messageId);
+        message.channels.push({
+          guildId: row.channel_guild_id,
+          channelId: row.channel_channel_id,
+          guildName: row.channel_guild_name,
+          channelName: row.channel_channel_name
+        });
+      }
+    });
     
-    return configs;
+    return Array.from(messageMap.values());
   } catch (error) {
     console.error('Error fetching embedded message configs:', error);
     return [];
@@ -165,31 +153,35 @@ async function saveEmbeddedMessageConfig(guildId, config) {
         ]
       );
       
-             // If multi-channel, update the channels table
-       if (isMultiChannel) {
-         // Get existing Discord message IDs before clearing
-         const [existingChannels] = await appDb.query(
-           "SELECT channel_id, discord_message_id FROM embedded_message_channels WHERE message_id = ?",
-           [config.id]
-         );
-         
-         const existingMessageIds = new Map(
-           existingChannels.map(ch => [ch.channel_id, ch.discord_message_id])
-         );
-         
-         // Clear existing channels
-         await appDb.query("DELETE FROM embedded_message_channels WHERE message_id = ?", [config.id]);
-         
-         // Insert new channels, preserving existing Discord message IDs
-         for (const channel of config.channels) {
-           const existingDiscordMessageId = existingMessageIds.get(channel.channelId) || null;
-           console.log(`💾 Preserving discord_message_id for channel ${channel.channelId}: ${existingDiscordMessageId || 'null'}`);
-           await appDb.query(
-             "INSERT INTO embedded_message_channels (message_id, guild_id, channel_id, guild_name, channel_name, discord_message_id) VALUES (?, ?, ?, ?, ?, ?)",
-             [config.id, channel.guildId, channel.channelId, channel.guildName, channel.channelName, existingDiscordMessageId]
-           );
-         }
-       }
+      // If multi-channel, update the channels table
+      if (isMultiChannel) {
+        // Get existing Discord message IDs before clearing
+        const [existingChannels] = await appDb.query(
+          "SELECT channel_id, discord_message_id FROM embedded_message_channels WHERE message_id = ?",
+          [config.id]
+        );
+        
+        const existingMessageIds = new Map(
+          existingChannels.map(ch => [ch.channel_id, ch.discord_message_id])
+        );
+        
+        // Clear existing channels
+        await appDb.query("DELETE FROM embedded_message_channels WHERE message_id = ?", [config.id]);
+        
+        // Batch insert new channels, preserving existing Discord message IDs
+        if (config.channels.length > 0) {
+          const values = config.channels.map(channel => {
+            const existingDiscordMessageId = existingMessageIds.get(channel.channelId) || null;
+            return [config.id, channel.guildId, channel.channelId, channel.guildName, channel.channelName, existingDiscordMessageId];
+          });
+          
+          const placeholders = values.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+          await appDb.query(
+            `INSERT INTO embedded_message_channels (message_id, guild_id, channel_id, guild_name, channel_name, discord_message_id) VALUES ${placeholders}`,
+            values.flat()
+          );
+        }
+      }
       
       return config.id;
     } else {
@@ -210,15 +202,20 @@ async function saveEmbeddedMessageConfig(guildId, config) {
       
       const configId = result.insertId;
       
-             // If multi-channel, insert into channels table
-       if (isMultiChannel) {
-         for (const channel of config.channels) {
-           await appDb.query(
-             "INSERT INTO embedded_message_channels (message_id, guild_id, channel_id, guild_name, channel_name, discord_message_id) VALUES (?, ?, ?, ?, ?, ?)",
-             [configId, channel.guildId, channel.channelId, channel.guildName, channel.channelName, null]
-           );
-         }
-       }
+      // If multi-channel, insert into channels table
+      if (isMultiChannel) {
+        if (config.channels.length > 0) {
+          const values = config.channels.map(channel => [
+            configId, channel.guildId, channel.channelId, channel.guildName, channel.channelName, null
+          ]);
+          
+          const placeholders = values.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+          await appDb.query(
+            `INSERT INTO embedded_message_channels (message_id, guild_id, channel_id, guild_name, channel_name, discord_message_id) VALUES ${placeholders}`,
+            values.flat()
+          );
+        }
+      }
       
       return configId;
     }
@@ -325,25 +322,35 @@ router.post('/', async (req, res) => {
         let sentMessages = [];
         
         if (config.channels && config.channels.length > 1) {
-          // Multi-channel message - send to all channels
-          for (const channel of config.channels) {
+          // Multi-channel message - send to all channels in parallel
+          const channelPromises = config.channels.map(async (channel) => {
             try {
               const sentMessage = await sendEmbeddedMessage(channel.guildId, { ...config, id: configId, channelId: channel.channelId });
               
-              // Update the discord_message_id in the channels table
-              await appDb.query(
-                "UPDATE embedded_message_channels SET discord_message_id = ? WHERE message_id = ? AND channel_id = ?",
-                [sentMessage.id, configId, channel.channelId]
-              );
-              
-              sentMessages.push({
+              return {
                 guildId: channel.guildId,
                 channelId: channel.channelId,
                 messageId: sentMessage.id
-              });
+              };
             } catch (channelError) {
               console.error(`Failed to send to channel ${channel.channelId}:`, channelError.message);
+              return null;
             }
+          });
+          
+          // Wait for all channels to be processed
+          const results = await Promise.all(channelPromises);
+          sentMessages = results.filter(result => result !== null);
+          
+          // Batch update all discord_message_id values
+          if (sentMessages.length > 0) {
+            const updatePromises = sentMessages.map(msg => 
+              appDb.query(
+                "UPDATE embedded_message_channels SET discord_message_id = ? WHERE message_id = ? AND channel_id = ?",
+                [msg.messageId, configId, msg.channelId]
+              )
+            );
+            await Promise.all(updatePromises);
           }
         } else {
           // Single-channel message
@@ -428,7 +435,6 @@ router.put('/:id', async (req, res) => {
     if (config.enabled && existingConfig && existingConfig.message_id) {
       if (config.channels && config.channels.length > 1) {
         // Multi-channel message - we'll edit existing messages if possible, or send new ones
-        console.log(`🔄 Multi-channel update: will edit existing messages or send new ones`);
       } else {
         // Single-channel message - delete old message to replace with new one
         try {
@@ -438,11 +444,10 @@ router.put('/:id', async (req, res) => {
             const oldMessage = await channel.messages.fetch(existingConfig.message_id).catch(() => null);
             if (oldMessage) {
               await oldMessage.delete().catch(() => {});
-              console.log(`🗑️ Deleted old Discord message ${existingConfig.message_id} when updating`);
             }
           }
         } catch (discordError) {
-          console.log(`⚠️ Failed to delete old Discord message: ${discordError.message}`);
+          // Continue with database deletion even if Discord deletion fails
         }
       }
     }
@@ -457,67 +462,74 @@ router.put('/:id', async (req, res) => {
         
         if (config.channels && config.channels.length > 1) {
           // Multi-channel message - try to edit existing messages or send new ones
-          for (const channel of config.channels) {
+          // Batch fetch all existing channel data first
+          const [allExistingChannels] = await appDb.query(
+            "SELECT channel_id, discord_message_id FROM embedded_message_channels WHERE message_id = ?",
+            [configId]
+          );
+          
+          const existingChannelMap = new Map(
+            allExistingChannels.map(ch => [ch.channel_id, ch.discord_message_id])
+          );
+          
+          // Process channels in parallel for better performance
+          const channelPromises = config.channels.map(async (channel) => {
             try {
-              // Check if we have an existing message in this channel
-              const [existingChannelRows] = await appDb.query(
-                "SELECT discord_message_id FROM embedded_message_channels WHERE message_id = ? AND channel_id = ?",
-                [configId, channel.channelId]
-              );
+              const existingDiscordMessageId = existingChannelMap.get(channel.channelId);
               
-              console.log(`🔍 Channel ${channel.channelId}: Found ${existingChannelRows.length} rows, discord_message_id: ${existingChannelRows[0]?.discord_message_id || 'null'}`);
-              
-              if (existingChannelRows.length > 0 && existingChannelRows[0].discord_message_id) {
+              if (existingDiscordMessageId) {
                 // Try to edit existing message
                 try {
                   const guild = await client.guilds.fetch(channel.guildId);
                   const discordChannel = await guild.channels.fetch(channel.channelId);
                   if (discordChannel && discordChannel.isTextBased()) {
-                    const existingMessage = await discordChannel.messages.fetch(existingChannelRows[0].discord_message_id).catch(() => null);
+                    const existingMessage = await discordChannel.messages.fetch(existingDiscordMessageId).catch(() => null);
                     if (existingMessage) {
                       // Edit the existing message
                       const embed = buildEmbed(config);
                       await existingMessage.edit({ embeds: [embed] });
-                      console.log(`✏️ Edited existing message ${existingChannelRows[0].discord_message_id} in channel ${channel.channelId}`);
                       
-                      // Update the discord_message_id in the channels table
-                      await appDb.query(
-                        "UPDATE embedded_message_channels SET discord_message_id = ? WHERE message_id = ? AND channel_id = ?",
-                        [existingMessage.id, configId, channel.channelId]
-                      );
-                      
-                      sentMessages.push({
+                      return {
                         guildId: channel.guildId,
                         channelId: channel.channelId,
-                        messageId: existingChannelRows[0].discord_message_id,
+                        messageId: existingDiscordMessageId,
                         edited: true
-                      });
-                      continue; // Skip to next channel
+                      };
                     }
                   }
                 } catch (editError) {
-                  console.log(`⚠️ Failed to edit message in channel ${channel.channelId}, will send new one:`, editError.message);
+                  // Continue with sending new message if editing fails
                 }
               }
               
               // Send new message if editing failed or no existing message
               const sentMessage = await sendEmbeddedMessage(channel.guildId, { ...config, id: configId, channelId: channel.channelId });
               
-              // Update the discord_message_id in the channels table
-              await appDb.query(
-                "UPDATE embedded_message_channels SET discord_message_id = ? WHERE message_id = ? AND channel_id = ?",
-                [sentMessage.id, configId, channel.channelId]
-              );
-              
-              sentMessages.push({
+              return {
                 guildId: channel.guildId,
                 channelId: channel.channelId,
                 messageId: sentMessage.id,
                 edited: false
-              });
+              };
             } catch (channelError) {
               console.error(`Failed to send to channel ${channel.channelId}:`, channelError.message);
+              return null;
             }
+          });
+          
+          // Wait for all channels to be processed
+          const results = await Promise.all(channelPromises);
+          sentMessages = results.filter(result => result !== null);
+          
+          // Batch update all discord_message_id values
+          if (sentMessages.length > 0) {
+            const updatePromises = sentMessages.map(msg => 
+              appDb.query(
+                "UPDATE embedded_message_channels SET discord_message_id = ? WHERE message_id = ? AND channel_id = ?",
+                [msg.messageId, configId, msg.channelId]
+              )
+            );
+            await Promise.all(updatePromises);
           }
         } else {
           // Single-channel message
@@ -618,11 +630,9 @@ router.delete('/:id', async (req, res) => {
           const message = await channel.messages.fetch(config.message_id).catch(() => null);
           if (message) {
             await message.delete().catch(() => {});
-            console.log(`🗑️ Deleted Discord message ${config.message_id} from channel ${config.channel_id}`);
           }
         }
       } catch (discordError) {
-        console.log(`⚠️ Failed to delete Discord message: ${discordError.message}`);
         // Continue with database deletion even if Discord deletion fails
       }
     }
@@ -671,11 +681,10 @@ router.patch('/:id', async (req, res) => {
           const message = await channel.messages.fetch(existingConfig.message_id).catch(() => null);
           if (message) {
             await message.delete().catch(() => {});
-            console.log(`🗑️ Deleted Discord message ${existingConfig.message_id} when disabling`);
           }
         }
       } catch (discordError) {
-        console.log(`⚠️ Failed to delete Discord message: ${discordError.message}`);
+        // Continue with database deletion even if Discord deletion fails
       }
     }
 
@@ -737,11 +746,10 @@ router.patch('/:id/toggle', async (req, res) => {
           const message = await channel.messages.fetch(existingConfig.message_id).catch(() => null);
           if (message) {
             await message.delete().catch(() => {});
-            console.log(`🗑️ Deleted Discord message ${existingConfig.message_id} when disabling (legacy toggle)`);
           }
         }
       } catch (discordError) {
-        console.log(`⚠️ Failed to delete Discord message: ${discordError.message}`);
+        // Continue with database deletion even if Discord deletion fails
       }
     }
 

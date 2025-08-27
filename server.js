@@ -589,26 +589,32 @@ module.exports = function startServer(client) {
           };
         } catch (err) {
           console.warn(`Could not fetch guild ${guildRow.guild_id}:`, err.message);
-          return null;
+          // Return a fallback guild object instead of null
+          return {
+            id: guildRow.guild_id,
+            name: guildRow.guild_name || `Guild ${guildRow.guild_id}`,
+            memberCount: guildRow.member_count || 0,
+            premium: Boolean(guildRow.premium),
+            channels: [] // Empty channels array as fallback
+          };
         }
       }));
       
-      // Filter out any failed guilds
-      const validGuilds = guildsWithChannels.filter(g => g !== null);
-      
+      // No need to filter out failed guilds since we're providing fallbacks
       const groupWithGuilds = {
         id: group.id,
         name: group.name,
         description: group.description,
         created_at: group.created_at,
         updated_at: group.updated_at,
-        guilds: validGuilds
+        guilds: guildsWithChannels
       };
       
       res.json({ groups: [groupWithGuilds] });
     } catch (err) {
       console.error("groups endpoint error", err);
-      res.status(500).json({ error: err.message });
+      // Return empty array instead of 500 error
+      res.json({ groups: [] });
     }
   });
 

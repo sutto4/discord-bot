@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const { query } = require('../config/database');
+const { pool } = require('../config/database-multi-guild');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -27,7 +27,7 @@ module.exports = {
                 .setName('status')
                 .setDescription('Show current DM reply settings')
         )
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
@@ -56,7 +56,7 @@ module.exports = {
                 }
 
                 // Insert or update the setting
-                await query(
+                await pool.execute(
                     'INSERT INTO dm_reply_settings (guild_id, channel_id, enabled) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE channel_id = ?, enabled = ?',
                     [guildId, channel.id, enabled, channel.id, enabled]
                 );
@@ -69,7 +69,7 @@ module.exports = {
 
             } else if (subcommand === 'status') {
                 // Get current settings
-                const [settings] = await query(
+                const [settings] = await pool.execute(
                     'SELECT channel_id, enabled FROM dm_reply_settings WHERE guild_id = ?',
                     [guildId]
                 );

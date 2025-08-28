@@ -1,5 +1,5 @@
 const { Events } = require('discord.js');
-const { query } = require('../config/database');
+const { pool } = require('../config/database-multi-guild');
 
 module.exports = {
     name: Events.MessageCreate,
@@ -19,7 +19,7 @@ module.exports = {
                 for (const [guildId, guild] of userGuilds) {
                     try {
                         // Get DM reply settings for this guild
-                        const [settings] = await query(
+                        const [settings] = await pool.execute(
                             'SELECT channel_id, enabled FROM dm_reply_settings WHERE guild_id = ? AND enabled = TRUE',
                             [guildId]
                         );

@@ -13,6 +13,7 @@ const client = new Client({
 		GatewayIntentBits.GuildMembers,
 		GatewayIntentBits.GuildMessages,
 		GatewayIntentBits.GuildMessageReactions,
+		GatewayIntentBits.DirectMessages,
 		GatewayIntentBits.MessageContent
 	],
 	partials: [
@@ -20,7 +21,8 @@ const client = new Client({
 		Partials.Channel,
 		Partials.Reaction,
 		Partials.User,
-		Partials.GuildMember
+		Partials.GuildMember,
+		Partials.ThreadMember
 	]
 });
 

@@ -74,6 +74,8 @@ module.exports = {
                     [guildId]
                 );
 
+                console.log(`[DM-REPLY-DEBUG] Status check for guild ${guildId}:`, settings);
+
                 if (settings && settings.enabled && settings.channel_id) {
                     const channel = interaction.guild.channels.cache.get(settings.channel_id);
                     if (channel) {

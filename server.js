@@ -508,7 +508,7 @@ module.exports = function startServer(client) {
           
           // Get channels for this guild - use the same logic as the current server endpoint
           const channels = guild.channels.cache
-            .filter(channel => channel.type === 0) // Text channels only
+            .filter(channel => channel.type === 0 || channel.type === 5) // Text channels (0) and forum channels (5)
             .map(channel => ({
               id: channel.id,
               name: channel.name,
@@ -517,8 +517,8 @@ module.exports = function startServer(client) {
             }))
             .sort((a, b) => a.position - b.position);
           
-          console.log(`✅ Successfully fetched guild ${guildRow.guild_id} with ${channels.length} text channels`);
-          console.log(`🔍 Text channels:`, channels.map(ch => `#${ch.name} (${ch.id})`));
+          console.log(`✅ Successfully fetched guild ${guildRow.guild_id} with ${channels.length} text and forum channels`);
+          console.log(`🔍 Text and forum channels:`, channels.map(ch => `#${ch.name} (${ch.id}) [type: ${ch.type}]`));
           
           return {
             id: guildRow.guild_id,
@@ -596,7 +596,7 @@ module.exports = function startServer(client) {
           
           // Get channels for this guild - use the same logic as the current server endpoint
           const channels = guild.channels.cache
-            .filter(channel => channel.type === 0) // Text channels only
+            .filter(channel => channel.type === 0 || channel.type === 5) // Text channels (0) and forum channels (5)
             .map(channel => ({
               id: channel.id,
               name: channel.name,
@@ -659,7 +659,7 @@ module.exports = function startServer(client) {
       
       // Fetch all channels
       const channels = guild.channels.cache
-        .filter(channel => channel.type === 0) // Text channels only
+        .filter(channel => channel.type === 0 || channel.type === 5) // Text channels (0) and forum channels (5)
         .map(channel => ({
           id: channel.id,
           name: channel.name,
@@ -668,8 +668,8 @@ module.exports = function startServer(client) {
         }))
         .sort((a, b) => a.position - b.position);
       
-      console.log(`✅ Current server channels - Successfully fetched ${channels.length} text channels`);
-      console.log(`🔍 Current server - Text channels:`, channels.map(ch => `#${ch.name} (${ch.id})`));
+      console.log(`✅ Current server channels - Successfully fetched ${channels.length} text and forum channels`);
+      console.log(`🔍 Current server - Text and forum channels:`, channels.map(ch => `#${ch.name} (${ch.id}) [type: ${ch.type}]`));
       
       res.json({ channels });
     } catch (err) {

@@ -47,7 +47,7 @@ module.exports = {
 	async execute(interaction) {
 		const subcommand = interaction.options.getSubcommand();
 
-		await interaction.deferReply({ ephemeral: true });
+		await interaction.deferReply({ flags: 64 });
 
 		try {
 			switch (subcommand) {

@@ -27,6 +27,11 @@ module.exports = {
                 .setName('status')
                 .setDescription('Show current DM reply settings')
         )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('list')
+                .setDescription('List all servers with DM reply enabled')
+        )
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
     async execute(interaction) {
@@ -42,7 +47,7 @@ module.exports = {
                 if (channel.type !== 0) {
                     return interaction.reply({
                         content: '❌ Please select a text channel.',
-                        ephemeral: true
+                        flags: 64
                     });
                 }
 
@@ -51,7 +56,7 @@ module.exports = {
                 if (!permissions.has('SendMessages') || !permissions.has('EmbedLinks')) {
                     return interaction.reply({
                         content: '❌ I need Send Messages and Embed Links permissions in that channel.',
-                        ephemeral: true
+                        flags: 64
                     });
                 }
 
@@ -64,7 +69,7 @@ module.exports = {
                 const status = enabled ? 'enabled' : 'disabled';
                 await interaction.reply({
                     content: `✅ DM reply forwarding has been ${status} and will forward to ${channel}`,
-                    ephemeral: true
+                    flags: 64
                 });
 
             } else if (subcommand === 'status') {
@@ -81,32 +86,65 @@ module.exports = {
                     if (channel) {
                         await interaction.reply({
                             content: `✅ DM reply forwarding is **enabled** and forwarding to ${channel}`,
-                            ephemeral: true
+                            flags: 64
                         });
                     } else {
                         await interaction.reply({
                             content: '⚠️ DM reply forwarding is enabled but the configured channel no longer exists.',
-                            ephemeral: true
+                            flags: 64
                         });
                     }
                 } else if (settings && !settings.enabled) {
                     await interaction.reply({
                         content: '❌ DM reply forwarding is **disabled**.',
-                        ephemeral: true
+                        flags: 64
                     });
                 } else {
                     await interaction.reply({
                         content: '❌ DM reply forwarding is not configured for this server.',
-                        ephemeral: true
+                        flags: 64
                     });
                 }
+
+            } else if (subcommand === 'list') {
+                // List all servers with DM reply enabled
+                const [allSettings] = await pool.execute(
+                    'SELECT ds.guild_id, ds.channel_id, ds.enabled, g.guild_name FROM dm_reply_settings ds LEFT JOIN guilds g ON ds.guild_id = g.guild_id WHERE ds.enabled = TRUE ORDER BY g.guild_name'
+                );
+
+                if (!allSettings || allSettings.length === 0) {
+                    await interaction.reply({
+                        content: '❌ No servers have DM reply forwarding enabled.',
+                        flags: 64
+                    });
+                    return;
+                }
+
+                let response = '**📋 Servers with DM Reply Forwarding Enabled:**\n\n';
+
+                for (const setting of allSettings) {
+                    const guildName = setting.guild_name || `Server ${setting.guild_id}`;
+                    const currentServer = setting.guild_id === guildId ? ' (current)' : '';
+                    response += `• **${guildName}**${currentServer}\n`;
+                    response += `  └ Channel: <#${setting.channel_id}>\n\n`;
+                }
+
+                // Truncate if too long for Discord
+                if (response.length > 2000) {
+                    response = response.substring(0, 1990) + '\n\n... (truncated)';
+                }
+
+                await interaction.reply({
+                    content: response,
+                    flags: 64
+                });
             }
 
         } catch (error) {
             console.error('Error in setdmreply command:', error);
             await interaction.reply({
                 content: '❌ An error occurred while updating the settings.',
-                ephemeral: true
+                flags: 64
             });
         }
     },

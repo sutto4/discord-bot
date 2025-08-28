@@ -37,16 +37,30 @@ async function applyBotCustomization(client, guildId) {
         }
         
         // Apply bot avatar change if different from current
-        if (settings.bot_avatar && settings.bot_avatar !== client.user.displayAvatarURL()) {
+        if (settings.bot_avatar) {
             try {
-                // Download the image and set it as avatar
-                const response = await fetch(settings.bot_avatar);
-                if (response.ok) {
-                    const buffer = await response.arrayBuffer();
-                    await client.user.setAvatar(Buffer.from(buffer));
-                    console.log(`[BOT-CUSTOMIZATION] Updated bot avatar in guild ${guild.name}`);
+                // Extract the base avatar URL without Discord's dynamic CDN parameters
+                const currentAvatarURL = client.user.displayAvatarURL({ dynamic: true });
+                const currentAvatarBase = currentAvatarURL.split('?')[0]; // Remove query parameters
+                const newAvatarBase = settings.bot_avatar.split('?')[0]; // Remove query parameters
+
+                // Only update if the base URLs are actually different
+                if (newAvatarBase !== currentAvatarBase) {
+                    console.log(`[BOT-CUSTOMIZATION] Avatar URLs differ - updating avatar`);
+                    console.log(`[BOT-CUSTOMIZATION] Current: ${currentAvatarBase}`);
+                    console.log(`[BOT-CUSTOMIZATION] New: ${newAvatarBase}`);
+
+                    // Download the image and set it as avatar
+                    const response = await fetch(settings.bot_avatar);
+                    if (response.ok) {
+                        const buffer = await response.arrayBuffer();
+                        await client.user.setAvatar(Buffer.from(buffer));
+                        console.log(`[BOT-CUSTOMIZATION] Updated bot avatar in guild ${guild.name}`);
+                    } else {
+                        console.error(`[BOT-CUSTOMIZATION] Failed to download avatar from ${settings.bot_avatar}`);
+                    }
                 } else {
-                    console.error(`[BOT-CUSTOMIZATION] Failed to download avatar from ${settings.bot_avatar}`);
+                    console.log(`[BOT-CUSTOMIZATION] Avatar URL unchanged for guild ${guild.name} - skipping update`);
                 }
             } catch (error) {
                 console.error(`[BOT-CUSTOMIZATION] Failed to update bot avatar in guild ${guild.name}:`, error.message);
@@ -197,8 +211,17 @@ async function immediateBotCustomizationUpdate(guildId) {
     // Apply bot avatar change
     if (settings.bot_avatar && settings.bot_avatar.trim() !== '') {
       try {
-        await global.client.user.setAvatar(settings.bot_avatar.trim());
-        console.log(`[BOT-CUSTOMIZATION] Bot avatar updated`);
+        // Check if avatar actually changed to avoid rate limiting
+        const currentAvatarURL = global.client.user.displayAvatarURL({ dynamic: true });
+        const currentAvatarBase = currentAvatarURL.split('?')[0];
+        const newAvatarBase = settings.bot_avatar.trim().split('?')[0];
+
+        if (newAvatarBase !== currentAvatarBase) {
+          await global.client.user.setAvatar(settings.bot_avatar.trim());
+          console.log(`[BOT-CUSTOMIZATION] Bot avatar updated`);
+        } else {
+          console.log(`[BOT-CUSTOMIZATION] Avatar unchanged - skipping update to avoid rate limit`);
+        }
       } catch (error) {
         console.error(`[BOT-CUSTOMIZATION] Failed to update bot avatar:`, error.message);
       }

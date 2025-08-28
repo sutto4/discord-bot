@@ -43,16 +43,29 @@ module.exports = {
                             [guildId]
                         );
 
-                        console.log(`[DM-REPLY] Guild ${guildId} settings:`, settings);
+                        console.log(`[DM-REPLY] Guild ${guildId} (${guild.name}) settings query result:`, settings);
+                        console.log(`[DM-REPLY] Settings array length:`, settings ? settings.length : 'null');
 
                         // settings is an array from pool.execute, check if it's empty or first row has no channel_id
-                        if (!settings || settings.length === 0 || !settings[0].channel_id) {
-                            console.log(`[DM-REPLY] No valid settings found for guild ${guildId}, skipping`);
+                        if (!settings || settings.length === 0) {
+                            console.log(`[DM-REPLY] No settings found for guild ${guildId} (${guild.name}) - skipping`);
                             continue;
                         }
 
                         const setting = settings[0]; // Get the first row
-                        console.log(`[DM-REPLY] Found settings for guild ${guildId}: channel=${setting.channel_id}, enabled=${setting.enabled}`);
+                        console.log(`[DM-REPLY] Retrieved setting for ${guild.name}:`, {
+                            guild_id: guildId,
+                            channel_id: setting.channel_id,
+                            enabled: setting.enabled,
+                            channel_exists: !!setting.channel_id
+                        });
+
+                        if (!setting.channel_id) {
+                            console.log(`[DM-REPLY] No channel_id found for guild ${guildId} (${guild.name}) - skipping`);
+                            continue;
+                        }
+
+                        console.log(`[DM-REPLY] ✅ Valid settings found for ${guild.name}: forwarding to channel ${setting.channel_id}`);
 
                         const targetChannel = await message.client.channels.fetch(setting.channel_id);
 
@@ -66,7 +79,8 @@ module.exports = {
                         // Create embed with guild context
                         const embed = {
                             color: 0x0099ff,
-                            title: `💬 DM from ${guild.name} Member`,
+                            title: `💬 DM Forwarded to ${guild.name}`,
+                            description: `*This DM was sent to the bot and is being forwarded because you're a member of this server.*`,
                             fields: [
                                 {
                                     name: '👤 From User',
@@ -74,8 +88,8 @@ module.exports = {
                                     inline: true
                                 },
                                 {
-                                    name: '🏠 Guild',
-                                    value: guild.name,
+                                    name: '🏠 Forwarded To',
+                                    value: `${guild.name} (${guildId})`,
                                     inline: true
                                 },
                                 {
@@ -91,6 +105,10 @@ module.exports = {
                             ],
                             thumbnail: {
                                 url: message.author.displayAvatarURL({ dynamic: true })
+                            },
+                            footer: {
+                                text: 'DM Reply Forwarding System',
+                                icon_url: message.client.user.displayAvatarURL({ dynamic: true })
                             },
                             timestamp: new Date().toISOString()
                         };
@@ -110,15 +128,17 @@ module.exports = {
 
                         console.log(`[DM-REPLY] Sending embed to ${targetChannel.name} in ${guild.name}`);
                         await targetChannel.send({ embeds: [embed] });
-                        console.log(`[DM-REPLY] Successfully sent DM to ${targetChannel.name} in ${guild.name}`);
+                        console.log(`[DM-REPLY] ✅ Successfully forwarded DM to ${targetChannel.name} in ${guild.name}`);
 
                     } catch (error) {
-                        console.error(`[DM-REPLY] Error forwarding DM to guild ${guildId}:`, error);
+                        console.error(`[DM-REPLY] ❌ Error forwarding DM to guild ${guildId} (${guild.name}):`, error.message);
                     }
                 }
 
+                console.log(`[DM-REPLY] Completed processing DM from ${message.author.tag} across all guilds`);
+
             } catch (error) {
-                console.error('Error processing DM reply:', error);
+                console.error(`[DM-REPLY] Fatal error processing DM from ${message.author.tag}:`, error);
             }
         }
     },

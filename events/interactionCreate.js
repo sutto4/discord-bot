@@ -10,7 +10,7 @@ module.exports = {
 		if (interaction.isStringSelectMenu() && interaction.customId && interaction.customId.startsWith('rr_menu_')) {
 			const { appDb } = require('../config/database');
 			try {
-				await interaction.deferReply({ ephemeral: true });
+				await interaction.deferReply({ flags: 64 });
 				const internalIdStr = interaction.customId.slice('rr_menu_'.length);
 				const internalId = Number(internalIdStr);
 				if (!Number.isFinite(internalId)) {

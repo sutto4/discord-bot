@@ -5,13 +5,10 @@ module.exports = {
     name: Events.MessageCreate,
     once: false,
     async execute(message) {
-        // Log all messages for debugging
-        console.log(`[DM-REPLY] Message received: ${message.content} from ${message.author.tag} in ${message.guild ? message.guild.name : 'DM'}`);
-
         // Only process DMs (not guild messages)
         if (!message.guild && message.author.id !== message.client.user.id) {
+            console.log(`[DM-REPLY] Processing DM: "${message.content}" from ${message.author.tag} (${message.author.id})`);
             try {
-                console.log(`[DM-REPLY] Processing DM from ${message.author.tag} (${message.author.id})`);
 
                 // Get all guilds the bot is in (we'll check membership later)
                 const userGuilds = message.client.guilds.cache;
@@ -20,10 +17,25 @@ module.exports = {
 
                 if (userGuilds.size === 0) return;
 
-                // Forward DM to each guild's configured channel
+                                // Forward DM to each guild's configured channel
                 for (const [guildId, guild] of userGuilds) {
                     try {
                         console.log(`[DM-REPLY] Checking guild: ${guild.name} (${guildId})`);
+
+                        // Check if the DM sender is actually a member of this guild
+                        let isMember = false;
+                        try {
+                            const member = await guild.members.fetch(message.author.id);
+                            isMember = !!member;
+                            console.log(`[DM-REPLY] User ${message.author.tag} is ${isMember ? '' : 'not '}a member of ${guild.name}`);
+                        } catch (error) {
+                            console.log(`[DM-REPLY] User ${message.author.tag} is not a member of ${guild.name} (fetch failed)`);
+                        }
+
+                        if (!isMember) {
+                            console.log(`[DM-REPLY] Skipping ${guild.name} - user is not a member`);
+                            continue;
+                        }
 
                         // Get DM reply settings for this guild
                         const [settings] = await pool.execute(
@@ -33,17 +45,19 @@ module.exports = {
 
                         console.log(`[DM-REPLY] Guild ${guildId} settings:`, settings);
 
-                        if (!settings || !settings.channel_id) {
-                            console.log(`[DM-REPLY] No settings found for guild ${guildId}, skipping`);
+                        // settings is an array from pool.execute, check if it's empty or first row has no channel_id
+                        if (!settings || settings.length === 0 || !settings[0].channel_id) {
+                            console.log(`[DM-REPLY] No valid settings found for guild ${guildId}, skipping`);
                             continue;
                         }
 
-                        console.log(`[DM-REPLY] Found settings for guild ${guildId}: channel=${settings.channel_id}, enabled=${settings.enabled}`);
+                        const setting = settings[0]; // Get the first row
+                        console.log(`[DM-REPLY] Found settings for guild ${guildId}: channel=${setting.channel_id}, enabled=${setting.enabled}`);
 
-                        const targetChannel = await message.client.channels.fetch(settings.channel_id);
+                        const targetChannel = await message.client.channels.fetch(setting.channel_id);
 
                         if (!targetChannel) {
-                            console.error(`[DM-REPLY] Could not find channel ${settings.channel_id} in guild ${guildId}`);
+                            console.error(`[DM-REPLY] Could not find channel ${setting.channel_id} in guild ${guildId}`);
                             continue;
                         }
 

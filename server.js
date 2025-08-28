@@ -498,8 +498,13 @@ module.exports = function startServer(client) {
           console.log(`🔍 Fetching Discord guild: ${guildRow.guild_id}`);
           const guild = await client.guilds.fetch(guildRow.guild_id);
           
+          console.log(`🔍 Guild ${guildRow.guild_id} fetched, channels cache size before fetch: ${guild.channels.cache.size}`);
+          
           // Ensure channels are fully loaded
           await guild.channels.fetch();
+          
+          console.log(`🔍 Guild ${guildRow.guild_id} channels fetched, cache size after fetch: ${guild.channels.cache.size}`);
+          console.log(`🔍 All channel types:`, Array.from(guild.channels.cache.values()).map(ch => ({ id: ch.id, name: ch.name, type: ch.type })));
           
           // Get channels for this guild - use the same logic as the current server endpoint
           const channels = guild.channels.cache
@@ -512,7 +517,8 @@ module.exports = function startServer(client) {
             }))
             .sort((a, b) => a.position - b.position);
           
-          console.log(`✅ Successfully fetched guild ${guildRow.guild_id} with ${channels.length} channels`);
+          console.log(`✅ Successfully fetched guild ${guildRow.guild_id} with ${channels.length} text channels`);
+          console.log(`🔍 Text channels:`, channels.map(ch => `#${ch.name} (${ch.id})`));
           
           return {
             id: guildRow.guild_id,
@@ -643,8 +649,13 @@ module.exports = function startServer(client) {
       const guildId = req.params.guildId;
       const guild = await client.guilds.fetch(guildId);
       
+      console.log(`🔍 Current server channels - Guild ${guildId} fetched, channels cache size before fetch: ${guild.channels.cache.size}`);
+      
       // Ensure channels are fully loaded
       await guild.channels.fetch();
+      
+      console.log(`🔍 Current server channels - Guild ${guildId} channels fetched, cache size after fetch: ${guild.channels.cache.size}`);
+      console.log(`🔍 Current server - All channel types:`, Array.from(guild.channels.cache.values()).map(ch => ({ id: ch.id, name: ch.name, type: ch.type })));
       
       // Fetch all channels
       const channels = guild.channels.cache
@@ -656,6 +667,9 @@ module.exports = function startServer(client) {
           position: channel.position
         }))
         .sort((a, b) => a.position - b.position);
+      
+      console.log(`✅ Current server channels - Successfully fetched ${channels.length} text channels`);
+      console.log(`🔍 Current server - Text channels:`, channels.map(ch => `#${ch.name} (${ch.id})`));
       
       res.json({ channels });
     } catch (err) {

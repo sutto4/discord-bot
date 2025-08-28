@@ -498,7 +498,10 @@ module.exports = function startServer(client) {
           console.log(`🔍 Fetching Discord guild: ${guildRow.guild_id}`);
           const guild = await client.guilds.fetch(guildRow.guild_id);
           
-          // Get channels for this guild
+          // Ensure channels are fully loaded
+          await guild.channels.fetch();
+          
+          // Get channels for this guild - use the same logic as the current server endpoint
           const channels = guild.channels.cache
             .filter(channel => channel.type === 0) // Text channels only
             .map(channel => ({
@@ -582,7 +585,10 @@ module.exports = function startServer(client) {
         try {
           const guild = await client.guilds.fetch(guildRow.guild_id);
           
-          // Get channels for this guild
+          // Ensure channels are fully loaded
+          await guild.channels.fetch();
+          
+          // Get channels for this guild - use the same logic as the current server endpoint
           const channels = guild.channels.cache
             .filter(channel => channel.type === 0) // Text channels only
             .map(channel => ({
@@ -636,6 +642,9 @@ module.exports = function startServer(client) {
     try {
       const guildId = req.params.guildId;
       const guild = await client.guilds.fetch(guildId);
+      
+      // Ensure channels are fully loaded
+      await guild.channels.fetch();
       
       // Fetch all channels
       const channels = guild.channels.cache

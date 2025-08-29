@@ -166,6 +166,41 @@ module.exports = function startServer(client) {
     return { accountByDiscord, groupsByAccount };
   }
 
+  // User hierarchy validation function
+  function validateUserHierarchy(actor, target, action) {
+    try {
+      // Guild owner can always perform actions
+      if (actor.id === actor.guild.ownerId) {
+        return null; // No error, owner can do anything
+      }
+
+      // Target is guild owner - only owner can modify owner
+      if (target.id === actor.guild.ownerId) {
+        return "Cannot modify server owner";
+      }
+
+      // Get highest roles for both users
+      const actorHighestRole = actor.roles.highest;
+      const targetHighestRole = target.roles.highest;
+
+      // Actor must have higher role than target
+      if (actorHighestRole.position <= targetHighestRole.position) {
+        return `You cannot ${action.replace('_', ' ')} users with equal or higher roles than you`;
+      }
+
+      // Actor must have required permissions
+      const requiredPermissions = ['ManageRoles'];
+      if (!requiredPermissions.every(perm => actor.permissions.has(perm))) {
+        return `You need the following permissions to ${action.replace('_', ' ')} roles: ${requiredPermissions.join(', ')}`;
+      }
+
+      return null; // No error, validation passed
+    } catch (error) {
+      console.error('Error validating user hierarchy:', error);
+      return "Error validating permissions";
+    }
+  }
+
   function applyFilters(members, { q, role, group }) {
     let out = members;
     if (q) {
@@ -684,13 +719,25 @@ module.exports = function startServer(client) {
   app.post("/api/guilds/:guildId/members/:userId/roles/:roleId", async (req, res) => {
     try {
       const { guildId, userId, roleId } = req.params;
-      // const actor = req.query.actor ? String(req.query.actor) : null; // available if you need to audit
+      const actorId = req.query.actor ? String(req.query.actor) : null;
       const guild = await client.guilds.fetch(guildId);
       const member = await guild.members.fetch(userId);
       const role = await guild.roles.fetch(roleId);
       if (!role) return res.status(404).json({ error: "role_not_found" });
       if (!role.editable)
         return res.status(400).json({ error: "uneditable_role" });
+
+      // Validate actor hierarchy if provided
+      if (actorId) {
+        const actor = await guild.members.fetch(actorId).catch(() => null);
+        if (actor) {
+          const hierarchyError = validateUserHierarchy(actor, member, 'add_role');
+          if (hierarchyError) {
+            return res.status(403).json({ error: hierarchyError });
+          }
+        }
+      }
+
       await member.roles.add(role);
       res.json({ ok: true });
     } catch (err) {
@@ -703,18 +750,139 @@ module.exports = function startServer(client) {
   app.delete("/api/guilds/:guildId/members/:userId/roles/:roleId", async (req, res) => {
     try {
       const { guildId, userId, roleId } = req.params;
-      // const actor = req.query.actor ? String(req.query.actor) : null;
+      const actorId = req.query.actor ? String(req.query.actor) : null;
       const guild = await client.guilds.fetch(guildId);
       const member = await guild.members.fetch(userId);
       const role = await guild.roles.fetch(roleId);
       if (!role) return res.status(404).json({ error: "role_not_found" });
       if (!role.editable)
         return res.status(400).json({ error: "uneditable_role" });
+
+      // Validate actor hierarchy if provided
+      if (actorId) {
+        const actor = await guild.members.fetch(actorId).catch(() => null);
+        if (actor) {
+          const hierarchyError = validateUserHierarchy(actor, member, 'remove_role');
+          if (hierarchyError) {
+            return res.status(403).json({ error: hierarchyError });
+          }
+        }
+      }
+
       await member.roles.remove(role);
       res.json({ ok: true });
     } catch (err) {
       console.error("remove role error", err);
       res.status(400).json({ error: err.message || "remove_failed" });
+    }
+  });
+
+  // Role Permissions Management API
+  // GET /api/guilds/:guildId/role-permissions - Get current role permissions
+  app.get("/api/guilds/:guildId/role-permissions", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const guild = await client.guilds.fetch(guildId);
+
+      // Get stored role permissions (for now, return empty - can be extended with database)
+      const permissions = [];
+
+      res.json({
+        guildId,
+        permissions
+      });
+    } catch (err) {
+      console.error("get role permissions error", err);
+      res.status(500).json({ error: "Failed to fetch role permissions" });
+    }
+  });
+
+  // PUT /api/guilds/:guildId/role-permissions - Update role permissions
+  app.put("/api/guilds/:guildId/role-permissions", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const { permissions } = req.body;
+
+      if (!Array.isArray(permissions)) {
+        return res.status(400).json({ error: "permissions must be an array" });
+      }
+
+      const guild = await client.guilds.fetch(guildId);
+
+      // Validate permissions format
+      for (const perm of permissions) {
+        if (!perm.roleId || typeof perm.canUseApp !== 'boolean') {
+          return res.status(400).json({ error: "Invalid permission format" });
+        }
+
+        // Verify role exists
+        const role = await guild.roles.fetch(perm.roleId).catch(() => null);
+        if (!role) {
+          return res.status(400).json({ error: `Role ${perm.roleId} not found` });
+        }
+      }
+
+      // Store permissions (for now, just return success - can be extended with database)
+      console.log(`[ROLE-PERMISSIONS] Updated permissions for guild ${guildId}:`, permissions);
+
+      res.json({
+        success: true,
+        message: "Role permissions updated successfully"
+      });
+    } catch (err) {
+      console.error("update role permissions error", err);
+      res.status(500).json({ error: "Failed to update role permissions" });
+    }
+  });
+
+  // POST /api/guilds/:guildId/role-permissions/check - Check user permissions
+  app.post("/api/guilds/:guildId/role-permissions/check", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const { userId, userRoles } = req.body;
+
+      if (!userId) {
+        return res.status(400).json({ error: "userId is required" });
+      }
+
+      const guild = await client.guilds.fetch(guildId);
+
+      // Get the user member object
+      const member = await guild.members.fetch(userId).catch(() => null);
+      if (!member) {
+        return res.status(404).json({ error: "User not found in guild" });
+      }
+
+      // Check if user is guild owner
+      const isOwner = member.id === guild.ownerId;
+
+      // Check if user has administrator permission
+      const hasAdminPermission = member.permissions.has('Administrator');
+
+      // Check if any of user's roles have app access (for now, default logic)
+      // This can be extended with database-stored role permissions
+      const hasRoleAccess = isOwner || hasAdminPermission || false;
+
+      // Determine overall app access
+      const canUseApp = isOwner || hasAdminPermission || hasRoleAccess;
+
+      console.log(`[PERMISSION-CHECK] User ${userId} in guild ${guildId}:`, {
+        isOwner,
+        hasAdminPermission,
+        hasRoleAccess,
+        canUseApp
+      });
+
+      res.json({
+        canUseApp,
+        isOwner,
+        hasRoleAccess,
+        userId,
+        userRoles: userRoles || []
+      });
+    } catch (err) {
+      console.error("check user permissions error", err);
+      res.status(500).json({ error: "Failed to check user permissions" });
     }
   });
 

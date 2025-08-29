@@ -16,10 +16,14 @@ module.exports = {
                 // Auto-reply with generic management message
                 const embed = new EmbedBuilder()
                     .setColor(0x5865F2)
-                    .setTitle('🤖 ServerMate Bot Support')
-                    .setDescription('**This is an automated response from the ServerMate Discord bot.**\n\n' +
-                        'Direct messages to this bot are not actively monitored for support requests. ' +
-                        'For ServerMate-specific support, questions, or feedback, please join our Discord server.')
+                    .setTitle('🤖 ServerMate Bot - Unmonitored DMs')
+                    .setDescription('**⚠️ IMPORTANT: This bot does not monitor or respond to direct messages**\n\n' +
+                        '**If you are trying to contact a specific server:**\n' +
+                        '• Please reach out directly to that server\'s staff or administrators\n' +
+                        '• This bot cannot forward messages or connect you to other servers\n\n' +
+                        '**For ServerMate-specific support, questions, or feedback:**\n' +
+                        '• Join our official Discord server for assistance\n' +
+                        '• Our support team will be happy to help you there')
                     .setFooter({ text: 'ServerMate Management System', iconURL: message.client.user.displayAvatarURL() })
                     .setTimestamp();
 

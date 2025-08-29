@@ -964,23 +964,32 @@ module.exports = function startServer(client) {
   const syncMemberCounts = async () => {
     try {
       console.log('🔄 Starting periodic member count sync...');
-      const [rows] = await appDb.query("SELECT guild_id, guild_name FROM guilds WHERE status = 'active' OR status IS NULL");
-      
+      const [rows] = await appDb.query("SELECT guild_id, guild_name, member_count FROM guilds WHERE status = 'active' OR status IS NULL");
+
+      console.log(`📊 Found ${rows.length} active guilds to sync`);
       let updatedCount = 0;
+
       for (const row of rows) {
         try {
           const guild = await client.guilds.fetch(row.guild_id);
-          await appDb.query(
-            "UPDATE guilds SET member_count = ?, member_count_updated_at = NOW() WHERE guild_id = ?",
-            [guild.memberCount || 0, row.guild_id]
-          );
-          updatedCount++;
+          const currentCount = guild.memberCount || 0;
+          const previousCount = row.member_count || 0;
+
+          // Only update if the count has changed
+          if (currentCount !== previousCount) {
+            await appDb.query(
+              "UPDATE guilds SET member_count = ?, member_count_updated_at = NOW() WHERE guild_id = ?",
+              [currentCount, row.guild_id]
+            );
+            console.log(`📈 Updated ${row.guild_name}: ${previousCount} → ${currentCount} members`);
+            updatedCount++;
+          }
         } catch (err) {
           console.warn(`⚠️ Could not sync member count for ${row.guild_name}:`, err.message);
         }
       }
-      
-      console.log(`✅ Periodic sync completed: Updated ${updatedCount} guilds`);
+
+      console.log(`✅ Periodic sync completed: Updated ${updatedCount}/${rows.length} guilds`);
     } catch (error) {
       console.error('❌ Periodic member count sync failed:', error);
     }
@@ -988,7 +997,9 @@ module.exports = function startServer(client) {
 
   // Start periodic sync (every 6 hours = 6 * 60 * 60 * 1000 ms)
   setInterval(syncMemberCounts, 6 * 60 * 60 * 1000);
-  
+
+
+
   // Run initial sync after 30 seconds (to let bot fully connect)
   setTimeout(syncMemberCounts, 30000);
 

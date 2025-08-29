@@ -19,7 +19,7 @@ async function logModerationAction(data) {
 
 	try {
 		// Insert into moderation_cases
-		await connection.execute(
+		await appDb.execute(
 			`INSERT INTO moderation_cases (
 				guild_id, case_id, action_type, target_user_id, target_username,
 				moderator_user_id, moderator_username, reason, duration_ms, duration_label,
@@ -42,7 +42,7 @@ async function logModerationAction(data) {
 		);
 
 		// Also log to moderation_logs for backwards compatibility
-		await connection.execute(
+		await appDb.execute(
 			`INSERT INTO moderation_logs (guild_id, case_id, action, user_id, username, details, created_at)
 			VALUES (?, ?, ?, ?, ?, ?, NOW())`,
 			[
@@ -69,9 +69,8 @@ async function logModerationAction(data) {
 	} catch (dbError) {
 		console.error('❌ Failed to save moderation action to database:', dbError);
 		// Don't throw error - we don't want to break the command if DB logging fails
-	} finally {
-		await connection.end();
 	}
+	// Note: No need to end connection when using a pool (appDb)
 }
 
 module.exports = { logModerationAction };

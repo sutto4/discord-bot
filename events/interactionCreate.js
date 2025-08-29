@@ -82,8 +82,20 @@ module.exports = {
 					});
 				}
 
-				// Use safe role assignment for verification
-				await safeAssignRole(interaction.member, verifyRole, 'User verification via web interface');
+				// Check if bot can assign the verification role
+				if (!verifyRole.editable) {
+					console.error(`[VERIFICATION] Cannot assign role ${verifyRole.name} - role is not editable by bot`);
+					await interaction.reply({
+						content: '❌ Could not verify you. The verification role cannot be assigned by the bot.',
+						flags: 64
+					});
+					return;
+				}
+
+				console.log(`[VERIFICATION] Assigning role ${verifyRole.name} to user ${interaction.user.tag} via verification`);
+				await interaction.member.roles.add(verifyRole, 'User verification via web interface').catch((error) => {
+					console.error(`[VERIFICATION] Failed to assign verification role ${verifyRole.name} to user ${interaction.user.tag}:`, error);
+				});
 				
 				// Create enhanced verification completion message with feedback button
 				const completionEmbed = new EmbedBuilder()

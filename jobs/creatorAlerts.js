@@ -279,6 +279,19 @@ async function assignDiscordRole(client, guildId, userId, roleId, platform) {
             return true;
         }
         
+        // Check if bot can assign this role before proceeding
+        const role = member.guild.roles.cache.get(roleId);
+        if (!role) {
+            console.error(`[CREATOR-ALERTS] Role ${roleId} not found in guild ${guild.name}`);
+            return false;
+        }
+
+        if (!role.editable) {
+            console.error(`[CREATOR-ALERTS] Cannot assign role ${role.name} - role is not editable by bot in guild ${guild.name}`);
+            return false;
+        }
+
+        console.log(`[CREATOR-ALERTS] Assigning role ${role.name} to user ${userId} in guild ${guild.name}`);
         await member.roles.add(roleId, `Creator Alert: User went live on ${platform}`);
         console.log(`[CREATOR-ALERTS] Assigned role ${role.name} to user ${userId} in guild ${guild.name}`);
         return true;

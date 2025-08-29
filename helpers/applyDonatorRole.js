@@ -39,10 +39,19 @@ async function applyDonatorRole(member, db, donatorRoleMapping) {
 			const roleName = donatorRoleMapping[highestTier];
 			const role = member.guild.roles.cache.find(r => r.name === roleName);
 			if (role && !member.roles.cache.has(role.id)) {
-				await member.roles.add(role).catch(() => {});
+				// Check if bot can assign this role
+				if (!role.editable) {
+					console.error(`[DONATOR-ROLES] Cannot assign role ${roleName} - role is not editable by bot`);
+					return false;
+				}
+
+				console.log(`[DONATOR-ROLES] Assigning ${roleName} to ${member.user.tag} via donator system`);
+				await member.roles.add(role, 'Donator role assignment').catch((error) => {
+					console.error(`[DONATOR-ROLES] Failed to assign ${roleName} to ${member.user.tag}:`, error);
+				});
 				addedRole = roleName;
 				rolesChanged = true;
-				console.log(`Assigned ${roleName} to ${member.user.tag}`);
+				console.log(`[DONATOR-ROLES] Successfully assigned ${roleName} to ${member.user.tag}`);
 			}
 		}
 

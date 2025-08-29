@@ -34,7 +34,22 @@ module.exports = {
 
 			const member = await guild.members.fetch(user.id).catch(() => null);
 			if (!member) return;
-			await member.roles.add(String(map.role_id), 'Reaction role add').catch(() => {});
+			// Check if bot can assign this role before proceeding
+			const role = guild.roles.cache.get(String(map.role_id));
+			if (!role) {
+				console.error(`[REACTION-ROLES] Role ${map.role_id} not found in guild ${guild.name}`);
+				return;
+			}
+
+			if (!role.editable) {
+				console.error(`[REACTION-ROLES] Cannot assign role ${role.name} - role is not editable by bot in guild ${guild.name}`);
+				return;
+			}
+
+			console.log(`[REACTION-ROLES] Assigning role ${role.name} to user ${user.tag} in guild ${guild.name} via reaction`);
+			await member.roles.add(String(map.role_id), 'Reaction role add').catch((error) => {
+				console.error(`[REACTION-ROLES] Failed to assign role ${role.name} to user ${user.tag}:`, error);
+			});
 		} catch {}
 	}
 };

@@ -167,7 +167,7 @@ module.exports = function startServer(client) {
   }
 
   // User hierarchy validation function
-  function validateUserHierarchy(actor, target, action) {
+  function validateUserHierarchy(actor, target, action, roleToAssign = null) {
     try {
       // Guild owner can always perform actions
       if (actor.id === actor.guild.ownerId) {
@@ -183,12 +183,28 @@ module.exports = function startServer(client) {
       const actorHighestRole = actor.roles.highest;
       const targetHighestRole = target.roles.highest;
 
-      // Actor must have higher role than target (cannot modify equal or higher roles)
-      if (actorHighestRole.position <= targetHighestRole.position) {
-        const targetPos = targetHighestRole.position;
-        const actorPos = actorHighestRole.position;
-        console.log(`[HIERARCHY-VALIDATION] Blocking ${action}: Actor role "${actorHighestRole.name}" (pos: ${actorPos}) vs Target role "${targetHighestRole.name}" (pos: ${targetPos})`);
-        return `You cannot ${action.replace('_', ' ')} users with equal or higher roles than you. Your highest role: "${actorHighestRole.name}" (position: ${actorPos}), Target's highest role: "${targetHighestRole.name}" (position: ${targetPos})`;
+      // If we're assigning a specific role, check if actor can assign that role
+      if (roleToAssign && action === 'add_role') {
+        console.log(`[HIERARCHY-VALIDATION] Checking role assignment: Actor highest role "${actorHighestRole.name}" (pos: ${actorHighestRole.position}) vs Role to assign "${roleToAssign.name}" (pos: ${roleToAssign.position})`);
+
+        // Actor must have higher role position than the role they're trying to assign
+        if (actorHighestRole.position <= roleToAssign.position) {
+          console.log(`[HIERARCHY-VALIDATION] BLOCKING ${action}: Actor cannot assign role at or above their level`);
+          return `You cannot assign roles that are at or above your highest role. Your highest role: "${actorHighestRole.name}" (position: ${actorHighestRole.position}), Role to assign: "${roleToAssign.name}" (position: ${roleToAssign.position})`;
+        }
+
+        console.log(`[HIERARCHY-VALIDATION] ALLOWED ${action}: Actor can assign this role`);
+      }
+
+      // For removal, actor must have higher role than target
+      if (action === 'remove_role') {
+        // Actor must have higher role than target (cannot modify equal or higher roles)
+        if (actorHighestRole.position <= targetHighestRole.position) {
+          const targetPos = targetHighestRole.position;
+          const actorPos = actorHighestRole.position;
+          console.log(`[HIERARCHY-VALIDATION] Blocking ${action}: Actor role "${actorHighestRole.name}" (pos: ${actorPos}) vs Target role "${targetHighestRole.name}" (pos: ${targetPos})`);
+          return `You cannot ${action.replace('_', ' ')} users with equal or higher roles than you. Your highest role: "${actorHighestRole.name}" (position: ${actorPos}), Target's highest role: "${targetHighestRole.name}" (position: ${targetPos})`;
+        }
       }
 
       // Actor must have required permissions
@@ -769,7 +785,7 @@ module.exports = function startServer(client) {
       if (actorId) {
         const actor = await guild.members.fetch(actorId).catch(() => null);
         if (actor) {
-          const hierarchyError = validateUserHierarchy(actor, member, 'add_role');
+          const hierarchyError = validateUserHierarchy(actor, member, 'add_role', role);
           if (hierarchyError) {
             console.log(`[API-ROLE-ADD] BLOCKED: Actor ${actorId} cannot add role ${roleId} to user ${userId} - ${hierarchyError}`);
             return res.status(403).json({ error: hierarchyError });
@@ -805,7 +821,7 @@ module.exports = function startServer(client) {
       if (actorId) {
         const actor = await guild.members.fetch(actorId).catch(() => null);
         if (actor) {
-          const hierarchyError = validateUserHierarchy(actor, member, 'remove_role');
+          const hierarchyError = validateUserHierarchy(actor, member, 'remove_role', role);
           if (hierarchyError) {
             console.log(`[API-ROLE-REMOVE] BLOCKED: Actor ${actorId} cannot remove role ${roleId} from user ${userId} - ${hierarchyError}`);
             return res.status(403).json({ error: hierarchyError });

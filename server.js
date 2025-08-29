@@ -1000,6 +1000,111 @@ module.exports = function startServer(client) {
 
 
 
+  // Moderation Actions API
+  app.post("/api/moderation/action", async (req, res) => {
+    try {
+      const { guildId, action, targetUserId, reason, duration } = req.body;
+
+      if (!guildId || !action || !targetUserId) {
+        return res.status(400).json({ error: "Missing required fields: guildId, action, targetUserId" });
+      }
+
+      console.log(`🔨 Performing moderation action: ${action} on ${targetUserId} in guild ${guildId}`);
+
+      // Fetch the guild
+      const guild = await client.guilds.fetch(guildId);
+      if (!guild) {
+        return res.status(404).json({ error: "Guild not found" });
+      }
+
+      // Fetch the target member
+      let member;
+      try {
+        member = await guild.members.fetch(targetUserId);
+      } catch (error) {
+        return res.status(404).json({ error: "Member not found in guild" });
+      }
+
+      const cleanReason = reason || "No reason provided";
+
+      try {
+        switch (action) {
+          case "ban":
+            await guild.members.ban(targetUserId, { reason: cleanReason, deleteMessageSeconds: 604800 }); // 7 days
+            console.log(`✅ Banned ${member.user.tag} from ${guild.name}`);
+            break;
+
+          case "unban":
+            await guild.members.unban(targetUserId, cleanReason);
+            console.log(`✅ Unbanned user ${targetUserId} from ${guild.name}`);
+            break;
+
+          case "kick":
+            await member.kick(cleanReason);
+            console.log(`✅ Kicked ${member.user.tag} from ${guild.name}`);
+            break;
+
+          case "timeout":
+          case "mute":
+            if (!duration) {
+              return res.status(400).json({ error: "Duration required for timeout/mute" });
+            }
+            const timeoutDuration = duration * 1000; // Convert to milliseconds
+            await member.timeout(timeoutDuration, cleanReason);
+            console.log(`✅ Timed out ${member.user.tag} for ${duration}s in ${guild.name}`);
+            break;
+
+          case "unmute":
+            await member.timeout(null, cleanReason);
+            console.log(`✅ Removed timeout from ${member.user.tag} in ${guild.name}`);
+            break;
+
+          case "warn":
+            // Warnings are just logged, no direct Discord action
+            console.log(`⚠️ Warned ${member.user.tag} in ${guild.name}: ${cleanReason}`);
+            break;
+
+          default:
+            return res.status(400).json({ error: `Unsupported action: ${action}` });
+        }
+
+        res.json({
+          success: true,
+          message: `Successfully performed ${action} on ${member.user.tag}`,
+          action,
+          targetUser: member.user.tag,
+          guild: guild.name
+        });
+
+      } catch (discordError) {
+        console.error(`❌ Discord API error for ${action}:`, discordError);
+
+        // Check if it's a permission error
+        if (discordError.code === 50013) {
+          return res.status(403).json({
+            error: "Bot lacks required permissions to perform this action",
+            details: "Missing permissions: " + (action === "ban" ? "Ban Members" :
+                      action === "kick" ? "Kick Members" :
+                      action === "timeout" || action === "mute" ? "Moderate Members" :
+                      action === "unban" ? "Ban Members" : "Unknown")
+          });
+        }
+
+        return res.status(500).json({
+          error: "Failed to perform Discord action",
+          details: discordError.message
+        });
+      }
+
+    } catch (error) {
+      console.error("❌ Moderation API error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        details: error.message
+      });
+    }
+  });
+
   // Run initial sync after 30 seconds (to let bot fully connect)
   setTimeout(syncMemberCounts, 30000);
 

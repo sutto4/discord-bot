@@ -678,59 +678,7 @@ module.exports = function startServer(client) {
     }
   });
 
-  // DM Reply Settings endpoints
-  app.get("/guilds/:guildId/dm-reply-settings", async (req, res) => {
-    try {
-      const { guildId } = req.params;
-      
-      const [settings] = await appDb.query(
-        'SELECT channel_id, enabled FROM dm_reply_settings WHERE guild_id = ?',
-        [guildId]
-      );
 
-      res.json({
-        success: true,
-        data: settings || { channel_id: null, enabled: false }
-      });
-
-    } catch (error) {
-      console.error('Error fetching DM reply settings:', error);
-      res.status(500).json({ success: false, error: 'Failed to fetch settings' });
-    }
-  });
-
-  app.put("/guilds/:guildId/dm-reply-settings", async (req, res) => {
-    try {
-      const { guildId } = req.params;
-      const { channel_id, enabled } = req.body;
-
-      if (enabled && !channel_id) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Channel ID is required when enabling' 
-        });
-      }
-
-      // Insert or update the setting
-      if (enabled) {
-        await appDb.query(
-          'INSERT INTO dm_reply_settings (guild_id, channel_id, enabled) VALUES (?, ?, TRUE) ON DUPLICATE KEY UPDATE channel_id = ?, enabled = TRUE',
-          [guildId, channel_id, channel_id]
-        );
-      } else {
-        await appDb.query(
-          'INSERT INTO dm_reply_settings (guild_id, channel_id, enabled) VALUES (?, "", FALSE) ON DUPLICATE KEY UPDATE enabled = FALSE',
-          [guildId]
-        );
-      }
-
-      res.json({ success: true });
-
-    } catch (error) {
-      console.error('Error updating DM reply settings:', error);
-      res.status(500).json({ success: false, error: 'Failed to update settings' });
-    }
-  });
 
   // Add role to user (actor accepted as query ?actor=ID)
   app.post("/api/guilds/:guildId/members/:userId/roles/:roleId", async (req, res) => {

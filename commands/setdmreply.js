@@ -1,47 +1,51 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const { pool } = require('../config/database-multi-guild');
 
+// ServerMate Guild ID (hardcoded for management feature)
+const SERVERMATE_GUILD_ID = '1403257704222429224';
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('setdmreply')
-        .setDescription('Configure DM reply forwarding settings')
+        .setDescription('🔧 ServerMate Management: Configure DM logging channel')
         .addSubcommand(subcommand =>
             subcommand
                 .setName('channel')
-                .setDescription('Set the channel and enable/disable DM reply forwarding')
+                .setDescription('Set the ServerMate channel for DM logging')
                 .addChannelOption(option =>
                     option
                         .setName('channel')
-                        .setDescription('The channel to send DM replies to')
+                        .setDescription('The ServerMate channel to log incoming DMs')
                         .setRequired(true)
-                )
-                .addBooleanOption(option =>
-                    option
-                        .setName('enabled')
-                        .setDescription('Enable or disable DM reply forwarding (defaults to enabled)')
-                        .setRequired(false)
                 )
         )
         .addSubcommand(subcommand =>
             subcommand
                 .setName('status')
-                .setDescription('Show current DM reply settings')
+                .setDescription('Show ServerMate DM logging status')
         )
         .addSubcommand(subcommand =>
             subcommand
-                .setName('list')
-                .setDescription('List all servers with DM reply enabled')
+                .setName('disable')
+                .setDescription('Disable DM logging for ServerMate')
         )
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .setDMPermission(false), // Cannot be used in DMs
 
     async execute(interaction) {
+        // Only allow in ServerMate guild
+        if (interaction.guildId !== SERVERMATE_GUILD_ID) {
+            return await interaction.reply({
+                content: '❌ **ServerMate Management Only**\n\nThis command is only available in the ServerMate Discord server for bot management purposes.',
+                flags: 64
+            });
+        }
+
         const subcommand = interaction.options.getSubcommand();
-        const guildId = interaction.guild.id;
 
         try {
             if (subcommand === 'channel') {
                 const channel = interaction.options.getChannel('channel');
-                const enabled = interaction.options.getBoolean('enabled') ?? true; // Default to true if not specified
 
                 // Check if it's a text channel
                 if (channel.type !== 0) {
@@ -60,82 +64,54 @@ module.exports = {
                     });
                 }
 
-                // Insert or update the setting
+                // Update DM logging settings for ServerMate
                 await pool.execute(
-                    'INSERT INTO dm_reply_settings (guild_id, channel_id, enabled) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE channel_id = ?, enabled = ?',
-                    [guildId, channel.id, enabled, channel.id, enabled]
+                    'INSERT INTO dm_reply_settings (guild_id, channel_id, enabled) VALUES (?, ?, TRUE) ON DUPLICATE KEY UPDATE channel_id = ?, enabled = TRUE',
+                    [SERVERMATE_GUILD_ID, channel.id, channel.id]
                 );
 
-                const status = enabled ? 'enabled' : 'disabled';
                 await interaction.reply({
-                    content: `✅ DM reply forwarding has been ${status} and will forward to ${channel}`,
+                    content: `✅ **ServerMate DM Logging Configured**\n\nDMs to the bot will now be logged to ${channel}\n\n**Management Features:**\n• Auto-reply with ServerMate invite\n• Detailed logging with user info\n• Attachment support\n• Timestamp tracking`,
                     flags: 64
                 });
 
             } else if (subcommand === 'status') {
-                // Get current settings
+                // Get DM logging settings for ServerMate
                 const [settings] = await pool.execute(
                     'SELECT channel_id, enabled FROM dm_reply_settings WHERE guild_id = ?',
-                    [guildId]
+                    [SERVERMATE_GUILD_ID]
                 );
 
-                console.log(`[DM-REPLY-DEBUG] Status check for guild ${guildId}:`, settings);
+                if (settings && settings.length > 0 && settings[0].enabled && settings[0].channel_id) {
+                    const channel = interaction.guild.channels.cache.get(settings[0].channel_id);
 
-                if (settings && settings.enabled && settings.channel_id) {
-                    const channel = interaction.guild.channels.cache.get(settings.channel_id);
                     if (channel) {
                         await interaction.reply({
-                            content: `✅ DM reply forwarding is **enabled** and forwarding to ${channel}`,
+                            content: `✅ **ServerMate DM Logging: ACTIVE**\n\n**Channel:** ${channel}\n**Status:** Receiving and logging DMs\n**Features:** Auto-reply + detailed logging`,
                             flags: 64
                         });
                     } else {
                         await interaction.reply({
-                            content: '⚠️ DM reply forwarding is enabled but the configured channel no longer exists.',
+                            content: `⚠️ **ServerMate DM Logging: CONFIGURED BUT CHANNEL MISSING**\n\nConfigured channel ID: ${settings[0].channel_id}\n\nPlease reconfigure with a valid channel.`,
                             flags: 64
                         });
                     }
-                } else if (settings && !settings.enabled) {
-                    await interaction.reply({
-                        content: '❌ DM reply forwarding is **disabled**.',
-                        flags: 64
-                    });
                 } else {
                     await interaction.reply({
-                        content: '❌ DM reply forwarding is not configured for this server.',
+                        content: `🔒 **ServerMate DM Logging: DISABLED**\n\nDM logging is currently disabled.\n\n**Management Features:**\n• Auto-reply with ServerMate invite\n• Detailed logging with user info\n• Attachment support\n\nUse \`/setdmreply channel\` to enable.`,
                         flags: 64
                     });
                 }
 
-            } else if (subcommand === 'list') {
-                // List all servers with DM reply enabled
-                const [allSettings] = await pool.execute(
-                    'SELECT ds.guild_id, ds.channel_id, ds.enabled, g.guild_name FROM dm_reply_settings ds LEFT JOIN guilds g ON ds.guild_id = g.guild_id WHERE ds.enabled = TRUE ORDER BY g.guild_name'
+            } else if (subcommand === 'disable') {
+                // Disable DM logging for ServerMate
+                await pool.execute(
+                    'UPDATE dm_reply_settings SET enabled = FALSE WHERE guild_id = ?',
+                    [SERVERMATE_GUILD_ID]
                 );
 
-                if (!allSettings || allSettings.length === 0) {
-                    await interaction.reply({
-                        content: '❌ No servers have DM reply forwarding enabled.',
-                        flags: 64
-                    });
-                    return;
-                }
-
-                let response = '**📋 Servers with DM Reply Forwarding Enabled:**\n\n';
-
-                for (const setting of allSettings) {
-                    const guildName = setting.guild_name || `Server ${setting.guild_id}`;
-                    const currentServer = setting.guild_id === guildId ? ' (current)' : '';
-                    response += `• **${guildName}**${currentServer}\n`;
-                    response += `  └ Channel: <#${setting.channel_id}>\n\n`;
-                }
-
-                // Truncate if too long for Discord
-                if (response.length > 2000) {
-                    response = response.substring(0, 1990) + '\n\n... (truncated)';
-                }
-
                 await interaction.reply({
-                    content: response,
+                    content: `🔒 **ServerMate DM Logging: DISABLED**\n\nDM logging has been disabled.\n\n**Note:** The bot will still auto-reply to DMs with ServerMate invite, but won't log them.`,
                     flags: 64
                 });
             }
@@ -143,7 +119,7 @@ module.exports = {
         } catch (error) {
             console.error('Error in setdmreply command:', error);
             await interaction.reply({
-                content: '❌ An error occurred while updating the settings.',
+                content: '❌ An error occurred while processing the command.',
                 flags: 64
             });
         }

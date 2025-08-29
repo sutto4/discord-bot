@@ -7,7 +7,11 @@ const clientId = process.env.CLIENT_ID;
 const guildIds = process.env.GUILD_IDS ? process.env.GUILD_IDS.split(',').map(id => id.trim()) : [process.env.GUILD_ID];
 const token = process.env.TOKEN;
 
-const commands = [];
+// ServerMate Guild ID for management commands
+const SERVERMATE_GUILD_ID = '1403257704222429224';
+
+const allCommands = [];
+const managementCommands = []; // Commands only for ServerMate
 const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
@@ -22,30 +26,59 @@ for (const file of commandFiles) {
 		continue;
 	}
 
-	commands.push(command.data.toJSON());
+	// Check if this is a ServerMate management command
+	if (file === 'setdmreply.js') {
+		managementCommands.push(command.data.toJSON());
+		console.log(`🔧 Added to management commands: ${file}`);
+	} else {
+		allCommands.push(command.data.toJSON());
+		console.log(`📋 Added to all commands: ${file}`);
+	}
 }
 
 const rest = new REST({ version: '10' }).setToken(token);
 
 (async () => {
 	try {
-		console.log(`Registering slash commands for ${guildIds.length} guild(s)...`);
-		
+		console.log(`🚀 Starting command deployment...`);
+		console.log(`📋 General commands: ${allCommands.length}`);
+		console.log(`🔧 Management commands: ${managementCommands.length}`);
+
+		// Deploy general commands to all guilds
+		console.log(`\n📋 Deploying general commands to ${guildIds.length} guild(s)...`);
 		for (const guildId of guildIds) {
 			if (!guildId) {
 				console.warn('⚠️ Skipping empty guild ID');
 				continue;
 			}
-			
-			console.log(`Deploying to guild: ${guildId}`);
+
+			console.log(`Deploying general commands to guild: ${guildId}`);
 			await rest.put(
 				Routes.applicationGuildCommands(clientId, guildId),
-				{ body: commands }
+				{ body: allCommands }
 			);
 		}
-		
-		console.log('✅ Slash commands registered for all guilds.');
+
+		// Deploy management commands only to ServerMate
+		if (managementCommands.length > 0) {
+			console.log(`\n🔧 Deploying management commands to ServerMate only...`);
+			console.log(`Deploying management commands to guild: ${SERVERMATE_GUILD_ID}`);
+
+			await rest.put(
+				Routes.applicationGuildCommands(clientId, SERVERMATE_GUILD_ID),
+				{ body: [...allCommands, ...managementCommands] }
+			);
+
+			console.log(`✅ Management commands deployed to ServerMate`);
+		}
+
+		console.log('\n🎉 Command deployment completed!');
+		console.log(`📊 Summary:`);
+		console.log(`   • General commands: ${allCommands.length} (all guilds)`);
+		console.log(`   • Management commands: ${managementCommands.length} (ServerMate only)`);
+		console.log(`   • Total guilds: ${guildIds.length}`);
+
 	} catch (error) {
-		console.error(error);
+		console.error('❌ Deployment failed:', error);
 	}
 })();

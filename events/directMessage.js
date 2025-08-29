@@ -1,146 +1,114 @@
-const { Events } = require('discord.js');
+const { Events, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const { pool } = require('../config/database-multi-guild');
+
+// ServerMate Guild ID (hardcoded for management feature)
+const SERVERMATE_GUILD_ID = '1403257704222429224';
 
 module.exports = {
     name: Events.MessageCreate,
     once: false,
     async execute(message) {
-        // Only process DMs (not guild messages)
+        // Only process DMs (not guild messages) and ignore bot's own messages
         if (!message.guild && message.author.id !== message.client.user.id) {
-            console.log(`[DM-REPLY] Processing DM: "${message.content}" from ${message.author.tag} (${message.author.id})`);
+            console.log(`[DM-MGMT] DM received from ${message.author.tag} (${message.author.id}): "${message.content.substring(0, 100)}${message.content.length > 100 ? '...' : ''}"`);
+
             try {
+                // Auto-reply with generic management message
+                const embed = new EmbedBuilder()
+                    .setColor(0x5865F2)
+                    .setTitle('🤖 ServerMate Bot Support')
+                    .setDescription('**This is an automated response from the ServerMate Discord bot.**\n\n' +
+                        'Direct messages to this bot are not actively monitored for support requests. ' +
+                        'For ServerMate-specific support, questions, or feedback, please join our Discord server.')
+                    .setFooter({ text: 'ServerMate Management System', iconURL: message.client.user.displayAvatarURL() })
+                    .setTimestamp();
 
-                // Get all guilds the bot is in (we'll check membership later)
-                const userGuilds = message.client.guilds.cache;
+                // Create button to ServerMate Discord
+                const row = new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setLabel('Join ServerMate Discord')
+                            .setStyle(ButtonStyle.Link)
+                            .setURL('https://discord.gg/nrSjZByddw') // ServerMate Discord invite
+                    );
 
-                console.log(`[DM-REPLY] Bot is in ${userGuilds.size} guilds`);
+                await message.reply({
+                    embeds: [embed],
+                    components: [row]
+                });
 
-                if (userGuilds.size === 0) return;
+                // Log DM to ServerMate's management channel only
+                await logDmToServerMate(message);
 
-                                // Forward DM to each guild's configured channel
-                for (const [guildId, guild] of userGuilds) {
-                    try {
-                        console.log(`[DM-REPLY] Checking guild: ${guild.name} (${guildId})`);
-
-                        // Check if the DM sender is actually a member of this guild
-                        let isMember = false;
-                        try {
-                            const member = await guild.members.fetch(message.author.id);
-                            isMember = !!member;
-                            console.log(`[DM-REPLY] User ${message.author.tag} is ${isMember ? '' : 'not '}a member of ${guild.name}`);
-                        } catch (error) {
-                            console.log(`[DM-REPLY] User ${message.author.tag} is not a member of ${guild.name} (fetch failed)`);
-                        }
-
-                        if (!isMember) {
-                            console.log(`[DM-REPLY] Skipping ${guild.name} - user is not a member`);
-                            continue;
-                        }
-
-                        // Get DM reply settings for this guild
-                        const [settings] = await pool.execute(
-                            'SELECT channel_id, enabled FROM dm_reply_settings WHERE guild_id = ? AND enabled = TRUE',
-                            [guildId]
-                        );
-
-                        console.log(`[DM-REPLY] Guild ${guildId} (${guild.name}) settings query result:`, settings);
-                        console.log(`[DM-REPLY] Settings array length:`, settings ? settings.length : 'null');
-
-                        // settings is an array from pool.execute, check if it's empty or first row has no channel_id
-                        if (!settings || settings.length === 0) {
-                            console.log(`[DM-REPLY] No settings found for guild ${guildId} (${guild.name}) - skipping`);
-                            continue;
-                        }
-
-                        const setting = settings[0]; // Get the first row
-                        console.log(`[DM-REPLY] Retrieved setting for ${guild.name}:`, {
-                            guild_id: guildId,
-                            channel_id: setting.channel_id,
-                            enabled: setting.enabled,
-                            channel_exists: !!setting.channel_id
-                        });
-
-                        if (!setting.channel_id) {
-                            console.log(`[DM-REPLY] No channel_id found for guild ${guildId} (${guild.name}) - skipping`);
-                            continue;
-                        }
-
-                        console.log(`[DM-REPLY] ✅ Valid settings found for ${guild.name}: forwarding to channel ${setting.channel_id}`);
-
-                        const targetChannel = await message.client.channels.fetch(setting.channel_id);
-
-                        if (!targetChannel) {
-                            console.error(`[DM-REPLY] Could not find channel ${setting.channel_id} in guild ${guildId}`);
-                            continue;
-                        }
-
-                        console.log(`[DM-REPLY] Found target channel: ${targetChannel.name} in ${guild.name}`);
-
-                        // Create embed with guild context
-                        const embed = {
-                            color: 0x0099ff,
-                            title: `💬 DM Forwarded to ${guild.name}`,
-                            description: `*This DM was sent to the bot and is being forwarded because you're a member of this server.*`,
-                            fields: [
-                                {
-                                    name: '👤 From User',
-                                    value: `${message.author.tag} (${message.author.id})`,
-                                    inline: true
-                                },
-                                {
-                                    name: '🏠 Forwarded To',
-                                    value: `${guild.name} (${guildId})`,
-                                    inline: true
-                                },
-                                {
-                                    name: '📅 Time',
-                                    value: `<t:${Math.floor(message.createdTimestamp / 1000)}:F>`,
-                                    inline: true
-                                },
-                                {
-                                    name: '💬 Message',
-                                    value: message.content || '*No text content*',
-                                    inline: false
-                                }
-                            ],
-                            thumbnail: {
-                                url: message.author.displayAvatarURL({ dynamic: true })
-                            },
-                            footer: {
-                                text: 'DM Reply Forwarding System',
-                                icon_url: message.client.user.displayAvatarURL({ dynamic: true })
-                            },
-                            timestamp: new Date().toISOString()
-                        };
-
-                        // Add attachments if any
-                        if (message.attachments.size > 0) {
-                            const attachmentList = message.attachments.map(att => 
-                                `[${att.name}](${att.url})`
-                            ).join('\n');
-                            
-                            embed.fields.push({
-                                name: '📎 Attachments',
-                                value: attachmentList,
-                                inline: false
-                            });
-                        }
-
-                        console.log(`[DM-REPLY] Sending embed to ${targetChannel.name} in ${guild.name}`);
-                        await targetChannel.send({ embeds: [embed] });
-                        console.log(`[DM-REPLY] ✅ Successfully forwarded DM to ${targetChannel.name} in ${guild.name}`);
-
-                    } catch (error) {
-                        console.error(`[DM-REPLY] ❌ Error forwarding DM to guild ${guildId} (${guild.name}):`, error.message);
-                    }
-                }
-
-                console.log(`[DM-REPLY] Completed processing DM from ${message.author.tag} across all guilds`);
+                console.log(`[DM-MGMT] ✅ Auto-replied and logged DM from ${message.author.tag}`);
 
             } catch (error) {
-                console.error(`[DM-REPLY] Fatal error processing DM from ${message.author.tag}:`, error);
+                console.error(`[DM-MGMT] ❌ Error processing DM from ${message.author.tag}:`, error);
             }
         }
     },
 };
+
+async function logDmToServerMate(message) {
+    try {
+        // Get ServerMate guild
+        const serverMateGuild = message.client.guilds.cache.get(SERVERMATE_GUILD_ID);
+        if (!serverMateGuild) {
+            console.log(`[DM-MGMT] ServerMate guild (${SERVERMATE_GUILD_ID}) not found`);
+            return;
+        }
+
+        // Get DM logging settings from database
+        const [settings] = await pool.execute(
+            'SELECT channel_id FROM dm_reply_settings WHERE guild_id = ? AND enabled = TRUE',
+            [SERVERMATE_GUILD_ID]
+        );
+
+        if (!settings || settings.length === 0) {
+            console.log(`[DM-MGMT] No DM logging channel configured for ServerMate`);
+            return;
+        }
+
+        const setting = settings[0];
+        const logChannel = await serverMateGuild.channels.fetch(setting.channel_id);
+
+        if (!logChannel) {
+            console.log(`[DM-MGMT] DM logging channel (${setting.channel_id}) not found in ServerMate`);
+            return;
+        }
+
+        // Create detailed log embed
+        const logEmbed = new EmbedBuilder()
+            .setColor(0xFFA500)
+            .setTitle('📨 Incoming DM')
+            .setDescription(`**From:** ${message.author.tag} (${message.author.id})`)
+            .addFields(
+                { name: '📝 Message', value: message.content || '*No text content*', inline: false },
+                { name: '⏰ Time', value: `<t:${Math.floor(message.createdTimestamp / 1000)}:F>`, inline: true },
+                { name: '🤖 Auto-Reply', value: '✅ Sent generic response with ServerMate invite', inline: true }
+            )
+            .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
+            .setFooter({ text: 'ServerMate DM Management System' })
+            .setTimestamp();
+
+        // Add attachments if any
+        if (message.attachments.size > 0) {
+            const attachmentList = message.attachments.map(att =>
+                `[${att.name}](${att.url})`
+            ).join('\n');
+
+            logEmbed.addFields({
+                name: '📎 Attachments',
+                value: attachmentList,
+                inline: false
+            });
+        }
+
+        await logChannel.send({ embeds: [logEmbed] });
+        console.log(`[DM-MGMT] 📝 Logged DM to ServerMate channel: #${logChannel.name}`);
+
+    } catch (error) {
+        console.error(`[DM-MGMT] Error logging DM to ServerMate:`, error);
+    }
+}
 

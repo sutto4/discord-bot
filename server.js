@@ -36,17 +36,20 @@ module.exports = function startServer(client) {
   // Get all guilds where the bot is installed
   app.get("/api/guilds", async (_req, res) => {
     try {
-      const [rows] = await appDb.query("SELECT guild_id, guild_name FROM guilds");
+      const [rows] = await appDb.query("SELECT guild_id, guild_name, status FROM guilds WHERE status = 'active'");
       
       // Get detailed guild info including member and role counts
-      const guilds = await Promise.all(rows.map(async (row) => {
+      // Filter out guilds that the bot can no longer access
+      const guilds = [];
+
+      for (const row of rows) {
         try {
           console.log(`🔍 Fetching details for guild: ${row.guild_name} (${row.guild_id})`);
           const guild = await client.guilds.fetch(row.guild_id);
           console.log(`✅ Fetched guild: ${guild.name}, members: ${guild.memberCount}, roles: ${guild.roles.cache.size}`);
-          
+
           await guild.roles.fetch();
-          
+
           // Update the database with fresh member count
           try {
             await appDb.query(
@@ -57,28 +60,35 @@ module.exports = function startServer(client) {
           } catch (dbError) {
             console.warn(`⚠️ Could not update member count for ${row.guild_name}:`, dbError.message);
           }
-          
-          return {
+
+          // Update status to active if it was previously inactive
+          if (row.status !== 'active') {
+            try {
+              await appDb.query("UPDATE guilds SET status = 'active', updated_at = NOW() WHERE guild_id = ?", [row.guild_id]);
+            } catch (dbError) {
+              console.warn(`⚠️ Could not update status for ${row.guild_name}:`, dbError.message);
+            }
+          }
+
+          guilds.push({
             guild_id: row.guild_id,
             guild_name: row.guild_name,
+            status: 'active',
             memberCount: guild.memberCount || 0,
             roleCount: guild.roles.cache.size || 0,
             iconUrl: guild.iconURL ? guild.iconURL({ size: 128, extension: "png" }) : null,
             createdAt: guild.createdAt ? guild.createdAt.toISOString() : null
-          };
+          });
         } catch (err) {
-          console.error(`❌ Error fetching guild ${row.guild_name}:`, err.message);
-          // Fallback if we can't fetch guild details
-          return {
-            guild_id: row.guild_id,
-            guild_name: row.guild_name,
-            memberCount: 0,
-            roleCount: 0,
-            iconUrl: null,
-            createdAt: null
-          };
+          // Mark guild as inactive since we can't access it
+          try {
+            await appDb.query("UPDATE guilds SET status = 'inactive', updated_at = NOW() WHERE guild_id = ?", [row.guild_id]);
+          } catch (dbError) {
+            console.warn(`⚠️ Could not mark ${row.guild_name} as inactive:`, dbError.message);
+          }
+          // Skip this guild from results
         }
-      }));
+      }
       
       res.json(guilds);
     } catch (err) {

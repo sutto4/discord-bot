@@ -1,5 +1,3 @@
-const mysql = require('mysql2/promise');
-
 /**
  * Logs a moderation action to the database
  * @param {Object} data - The moderation action data
@@ -17,13 +15,7 @@ const mysql = require('mysql2/promise');
  * @param {Date|null} data.expiresAt - When the action expires (if applicable)
  */
 async function logModerationAction(data) {
-	const connection = await mysql.createConnection({
-		host: process.env.DB_HOST || '127.0.0.1',
-		user: process.env.DB_USER || 'root',
-		password: process.env.DB_PASS || '',
-		database: process.env.DB_NAME || 'chester_bot',
-		port: process.env.DB_PORT || 3306,
-	});
+	const { appDb } = require('../config/database');
 
 	try {
 		// Insert into moderation_cases

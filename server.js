@@ -964,7 +964,7 @@ module.exports = function startServer(client) {
   const syncMemberCounts = async () => {
     try {
       console.log('🔄 Starting periodic member count sync...');
-      const [rows] = await appDb.query("SELECT guild_id, guild_name FROM guilds WHERE status != 'left' OR status IS NULL");
+      const [rows] = await appDb.query("SELECT guild_id, guild_name FROM guilds WHERE status = 'active' OR status IS NULL");
       
       let updatedCount = 0;
       for (const row of rows) {

@@ -9,10 +9,10 @@ module.exports = {
 			// Get database connection
 			const { appDb } = require('../config/database');
 			
-			// Update guild status to 'left' instead of removing (soft delete)
+			// Update guild status to 'inactive' instead of removing (soft delete)
 			await appDb.query(
 				'UPDATE guilds SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE guild_id = ?',
-				['left', guild.id]
+				['inactive', guild.id]
 			);
 			
 			// Clean up guild-specific features (remove from guild_features table)
@@ -36,7 +36,7 @@ module.exports = {
 				id: guild.id,
 				memberCount: guild.memberCount,
 				leftAt: new Date().toISOString(),
-				action: 'Status updated to "left", features cleaned up'
+				action: 'Status updated to "inactive", features cleaned up'
 			});
 			
 		} catch (error) {
@@ -47,9 +47,9 @@ module.exports = {
 				const { appDb } = require('../config/database');
 				await appDb.query(
 					'UPDATE guilds SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE guild_id = ?',
-					['left', guild.id]
+					['inactive', guild.id]
 				);
-				console.log(`[GUILD_DELETE] Status updated to "left" for guild ${guild.id} despite cleanup errors`);
+				console.log(`[GUILD_DELETE] Status updated to "inactive" for guild ${guild.id} despite cleanup errors`);
 			} catch (statusError) {
 				console.error(`[GUILD_DELETE] Failed to update status for guild ${guild.id}:`, statusError);
 			}

@@ -82,7 +82,8 @@ module.exports = {
 					});
 				}
 
-				await interaction.member.roles.add(verifyRole);
+				// Use safe role assignment for verification
+				await safeAssignRole(interaction.member, verifyRole, 'User verification via web interface');
 				
 				// Create enhanced verification completion message with feedback button
 				const completionEmbed = new EmbedBuilder()

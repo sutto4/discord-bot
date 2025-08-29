@@ -204,6 +204,41 @@ module.exports = function startServer(client) {
     }
   }
 
+  // Safe role assignment with hierarchy validation
+  async function safeAssignRole(member, role, reason = 'Role assignment') {
+    try {
+      // For automated systems (no actor), check if bot can assign the role
+      if (!role.editable) {
+        console.log(`[SAFE-ASSIGN] Cannot assign role ${role.name} - role is not editable by bot`);
+        return false;
+      }
+
+      console.log(`[SAFE-ASSIGN] Assigning role ${role.name} to user ${member.user.tag} - ${reason}`);
+      await member.roles.add(role, reason);
+      return true;
+    } catch (error) {
+      console.error(`[SAFE-ASSIGN] Failed to assign role ${role.name} to user ${member.user.tag}:`, error);
+      return false;
+    }
+  }
+
+  // Safe role removal with hierarchy validation
+  async function safeRemoveRole(member, role, reason = 'Role removal') {
+    try {
+      if (!role.editable) {
+        console.log(`[SAFE-REMOVE] Cannot remove role ${role.name} - role is not editable by bot`);
+        return false;
+      }
+
+      console.log(`[SAFE-REMOVE] Removing role ${role.name} from user ${member.user.tag} - ${reason}`);
+      await member.roles.remove(role, reason);
+      return true;
+    } catch (error) {
+      console.error(`[SAFE-REMOVE] Failed to remove role ${role.name} from user ${member.user.tag}:`, error);
+      return false;
+    }
+  }
+
   function applyFilters(members, { q, role, group }) {
     let out = members;
     if (q) {
@@ -736,12 +771,17 @@ module.exports = function startServer(client) {
         if (actor) {
           const hierarchyError = validateUserHierarchy(actor, member, 'add_role');
           if (hierarchyError) {
+            console.log(`[API-ROLE-ADD] BLOCKED: Actor ${actorId} cannot add role ${roleId} to user ${userId} - ${hierarchyError}`);
             return res.status(403).json({ error: hierarchyError });
           }
         }
       }
 
-      await member.roles.add(role);
+      console.log(`[API-ROLE-ADD] ALLOWED: Adding role ${roleId} (${role.name}) to user ${userId} by actor ${actorId}`);
+      const success = await safeAssignRole(member, role, `Role added via web interface by user ${actorId}`);
+      if (!success) {
+        return res.status(500).json({ error: "Failed to assign role" });
+      }
       res.json({ ok: true });
     } catch (err) {
       console.error("add role error", err);
@@ -767,12 +807,17 @@ module.exports = function startServer(client) {
         if (actor) {
           const hierarchyError = validateUserHierarchy(actor, member, 'remove_role');
           if (hierarchyError) {
+            console.log(`[API-ROLE-REMOVE] BLOCKED: Actor ${actorId} cannot remove role ${roleId} from user ${userId} - ${hierarchyError}`);
             return res.status(403).json({ error: hierarchyError });
           }
         }
       }
 
-      await member.roles.remove(role);
+      console.log(`[API-ROLE-REMOVE] ALLOWED: Removing role ${roleId} (${role.name}) from user ${userId} by actor ${actorId}`);
+      const success = await safeRemoveRole(member, role, `Role removed via web interface by user ${actorId}`);
+      if (!success) {
+        return res.status(500).json({ error: "Failed to remove role" });
+      }
       res.json({ ok: true });
     } catch (err) {
       console.error("remove role error", err);

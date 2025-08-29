@@ -18,8 +18,8 @@ async function logModerationAction(data) {
 	const { appDb } = require('../config/database');
 
 	try {
-		// Insert into moderation_cases
-		await appDb.execute(
+		// Insert into moderation_cases first
+		const [result] = await appDb.execute(
 			`INSERT INTO moderation_cases (
 				guild_id, case_id, action_type, target_user_id, target_username,
 				moderator_user_id, moderator_username, reason, duration_ms, duration_label,
@@ -41,13 +41,17 @@ async function logModerationAction(data) {
 			]
 		);
 
+		// Get the auto-increment ID from moderation_cases
+		const caseIdInt = result.insertId;
+
 		// Also log to moderation_logs for backwards compatibility
+		// Use the integer ID from moderation_cases, not the string case_id
 		await appDb.execute(
 			`INSERT INTO moderation_logs (guild_id, case_id, action, user_id, username, details, created_at)
 			VALUES (?, ?, ?, ?, ?, ?, NOW())`,
 			[
 				data.guildId,
-				data.caseId,
+				caseIdInt, // Use the integer ID, not the string case_id
 				data.actionType,
 				data.targetUserId,
 				data.targetUsername,
@@ -58,6 +62,7 @@ async function logModerationAction(data) {
 		console.log('✅ Moderation action saved to database:', {
 			guildId: data.guildId,
 			caseId: data.caseId,
+			caseIdInt: caseIdInt,
 			actionType: data.actionType,
 			targetUserId: data.targetUserId,
 			targetUsername: data.targetUsername,

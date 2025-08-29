@@ -63,8 +63,9 @@ module.exports = {
 				reason
 			);
 			
-			// TODO: Database logging will be added later
-			console.log('Moderation action logged:', {
+			// Log to database
+			const { logModerationAction } = require('../utils/databaseLogger');
+			await logModerationAction({
 				guildId: interaction.guildId,
 				caseId,
 				actionType: 'unban',

@@ -183,9 +183,12 @@ module.exports = function startServer(client) {
       const actorHighestRole = actor.roles.highest;
       const targetHighestRole = target.roles.highest;
 
-      // Actor must have higher role than target
+      // Actor must have higher role than target (cannot modify equal or higher roles)
       if (actorHighestRole.position <= targetHighestRole.position) {
-        return `You cannot ${action.replace('_', ' ')} users with equal or higher roles than you`;
+        const targetPos = targetHighestRole.position;
+        const actorPos = actorHighestRole.position;
+        console.log(`[HIERARCHY-VALIDATION] Blocking ${action}: Actor role "${actorHighestRole.name}" (pos: ${actorPos}) vs Target role "${targetHighestRole.name}" (pos: ${targetPos})`);
+        return `You cannot ${action.replace('_', ' ')} users with equal or higher roles than you. Your highest role: "${actorHighestRole.name}" (position: ${actorPos}), Target's highest role: "${targetHighestRole.name}" (position: ${targetPos})`;
       }
 
       // Actor must have required permissions

@@ -71,9 +71,8 @@ module.exports = {
 				durationLabel
 			);
 			
-			// Log to database
-			const { logModerationAction } = require('../utils/databaseLogger');
-			await logModerationAction({
+			// TODO: Database logging will be added later
+			console.log('Moderation action logged:', {
 				guildId: interaction.guildId,
 				caseId,
 				actionType: 'ban',
@@ -82,9 +81,9 @@ module.exports = {
 				moderatorUserId: interaction.user.id,
 				moderatorUsername: interaction.user.tag,
 				reason,
-				durationMs: durationMs || null,
-				durationLabel: durationLabel || null,
-				active: true, // bans are active until unbanned
+				durationMs,
+				durationLabel,
+				active: true,
 				expiresAt: durationMs ? new Date(Date.now() + durationMs) : null
 			});
 

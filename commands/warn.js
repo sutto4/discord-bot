@@ -35,9 +35,8 @@ module.exports = {
 				reason
 			);
 			
-			// Log to database
-			const { logModerationAction } = require('../utils/databaseLogger');
-			await logModerationAction({
+			// TODO: Database logging will be added later
+			console.log('Moderation action logged:', {
 				guildId: interaction.guildId,
 				caseId,
 				actionType: 'warn',
@@ -48,7 +47,7 @@ module.exports = {
 				reason,
 				durationMs: null,
 				durationLabel: null,
-				active: false, // warnings are not active/ongoing actions
+				active: false,
 				expiresAt: null
 			});
 

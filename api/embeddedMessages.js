@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { appDb } = require('../config/database');
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const client = require('../config/bot');
 
 // In-memory map: messageId -> { id, username }
@@ -46,6 +46,34 @@ function buildEmbed(config) {
   }
   
   return embed;
+}
+
+/**
+ * Build action row with buttons for Discord embed
+ */
+function buildActionRow(config) {
+  if (!config.enableButtons || !config.buttons || config.buttons.length === 0) {
+    return null;
+  }
+  
+
+  const actionRow = new ActionRowBuilder();
+  
+  config.buttons.forEach(button => {
+    const buttonBuilder = new ButtonBuilder()
+      .setLabel(button.label)
+      .setURL(button.url)
+      .setStyle(
+        button.style === 'primary' ? ButtonStyle.Primary :
+        button.style === 'secondary' ? ButtonStyle.Secondary :
+        button.style === 'danger' ? ButtonStyle.Danger :
+        ButtonStyle.Link
+      );
+    
+    actionRow.addComponents(buttonBuilder);
+  });
+  
+  return actionRow;
 }
 
 /**
@@ -98,6 +126,8 @@ async function getEmbeddedMessageConfigs(guildId) {
           createdAt: row.created_at,
           updatedAt: row.updated_at,
           multiChannel: row.multi_channel === 1,
+          enableButtons: row.enable_buttons === 1,
+          buttons: row.buttons ? JSON.parse(row.buttons) : [],
           channels: []
         };
         
@@ -143,13 +173,15 @@ async function saveEmbeddedMessageConfig(guildId, config) {
         `UPDATE embedded_messages SET 
           channel_id = ?, message_id = ?, title = ?, description = ?, color = ?, 
           image_url = ?, thumbnail_url = ?, author_name = ?, author_icon_url = ?, 
-          footer_text = ?, footer_icon_url = ?, timestamp = ?, enabled = ?, multi_channel = ?, updated_at = NOW()
+          footer_text = ?, footer_icon_url = ?, timestamp = ?, enabled = ?, multi_channel = ?, 
+          enable_buttons = ?, buttons = ?, updated_at = NOW()
           WHERE id = ? AND guild_id = ?`,
         [
           config.channelId, config.messageId, config.title, config.description, config.color,
           config.imageUrl, config.thumbnailUrl, authorName, authorIconUrl,
           footerText, footerIconUrl, config.timestamp, config.enabled !== false ? 1 : 0,
-          isMultiChannel ? 1 : 0, config.id, guildId
+          isMultiChannel ? 1 : 0, config.enableButtons ? 1 : 0, 
+          config.buttons ? JSON.stringify(config.buttons) : null, config.id, guildId
         ]
       );
       
@@ -190,13 +222,15 @@ async function saveEmbeddedMessageConfig(guildId, config) {
         `INSERT INTO embedded_messages (
           guild_id, channel_id, message_id, title, description, color, 
           image_url, thumbnail_url, author_name, author_icon_url, 
-          footer_text, footer_icon_url, timestamp, enabled, multi_channel, created_by, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+          footer_text, footer_icon_url, timestamp, enabled, multi_channel, 
+          enable_buttons, buttons, created_by, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
         [
           guildId, config.channelId, config.messageId, config.title, config.description, config.color,
           config.imageUrl, config.thumbnailUrl, authorName, authorIconUrl,
           footerText, footerIconUrl, config.timestamp, config.enabled !== false ? 1 : 0,
-          isMultiChannel ? 1 : 0, config.createdBy || 'ServerMate Bot'
+          isMultiChannel ? 1 : 0, config.enableButtons ? 1 : 0, 
+          config.buttons ? JSON.stringify(config.buttons) : null, config.createdBy || 'ServerMate Bot'
         ]
       );
       
@@ -270,7 +304,14 @@ async function sendEmbeddedMessage(guildId, config) {
     }
 
     const embed = buildEmbed(config);
-    const message = await channel.send({ embeds: [embed] });
+    const actionRow = buildActionRow(config);
+    
+    const messageOptions = { embeds: [embed] };
+    if (actionRow) {
+      messageOptions.components = [actionRow];
+    }
+    
+    const message = await channel.send(messageOptions);
     
     // Store who created this message
     createdByCache.set(message.id, { id: config.id, username: 'ServerMate Bot' });
@@ -487,7 +528,14 @@ router.put('/:id', async (req, res) => {
                     if (existingMessage) {
                       // Edit the existing message
                       const embed = buildEmbed(config);
-                      await existingMessage.edit({ embeds: [embed] });
+                      const actionRow = buildActionRow(config);
+                      
+                      const editOptions = { embeds: [embed] };
+                      if (actionRow) {
+                        editOptions.components = [actionRow];
+                      }
+                      
+                      await existingMessage.edit(editOptions);
                       
                       return {
                         guildId: channel.guildId,

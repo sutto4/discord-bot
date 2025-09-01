@@ -200,36 +200,48 @@ module.exports = function startServer(client) {
       var guildId = req.params.guildId;
       var commands = req.body.commands;
 
+      console.log(`[BOT-COMMANDS-API] Received command update for guild ${guildId}:`, commands);
+
       if (!Array.isArray(commands)) {
+        console.error('[BOT-COMMANDS-API] Commands must be an array, received:', typeof commands);
         return res.status(400).json({ error: 'Commands must be an array' });
       }
 
       var guild = await client.guilds.fetch(guildId);
+      console.log(`[BOT-COMMANDS-API] Fetched guild: ${guild.name} (${guild.id})`);
 
       // Update each command state
       for (var i = 0; i < commands.length; i++) {
         var cmd = commands[i];
-        await appDb.query(
+        console.log(`[BOT-COMMANDS-API] Updating command ${cmd.name} to ${cmd.enabled ? 'enabled' : 'disabled'}`);
+        
+        var result = await appDb.query(
           `INSERT INTO guild_commands (guild_id, command_name, enabled)
            VALUES (?, ?, ?)
            ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_at = CURRENT_TIMESTAMP`,
           [guildId, cmd.name, cmd.enabled ? 1 : 0]
         );
+        
+        console.log(`[BOT-COMMANDS-API] Database result for ${cmd.name}:`, result);
       }
 
       // Trigger command update
       if (client.commandManager) {
+        console.log(`[BOT-COMMANDS-API] Triggering command manager update for guild ${guildId}`);
         await client.commandManager.updateGuildCommands(guildId, {});
+      } else {
+        console.log(`[BOT-COMMANDS-API] No command manager available`);
       }
 
+      console.log(`[BOT-COMMANDS-API] Successfully updated ${commands.length} commands for guild ${guildId}`);
       res.json({
         success: true,
         message: `Updated ${commands.length} commands for guild ${guildId}`
       });
 
     } catch (error) {
-      console.error('[COMMANDS-API] Error updating commands:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      console.error('[BOT-COMMANDS-API] Error updating commands:', error);
+      res.status(500).json({ error: 'Internal server error', details: error.message });
     }
   });
 

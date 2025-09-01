@@ -137,8 +137,25 @@ module.exports = function startServer(client) {
         var guildState = commandStates.find(function(s) {
           return s.command_name === cmd;
         });
+        
+        // Map commands to their parent features
+        var parentFeature = null;
+        if (['warn', 'kick', 'ban', 'mute'].includes(cmd)) {
+          parentFeature = 'moderation';
+        } else if (['role'].includes(cmd)) {
+          parentFeature = 'reaction_roles';
+        } else if (['custom'].includes(cmd)) {
+          parentFeature = 'custom_commands';
+        } else if (['sendverify', 'setverifylog'].includes(cmd)) {
+          parentFeature = 'verification_system';
+        } else if (['feedback'].includes(cmd)) {
+          parentFeature = 'feedback_system';
+        } else if (['embed'].includes(cmd)) {
+          parentFeature = 'embedded_messages';
+        }
+        
         var featureState = featureStates.find(function(s) {
-          return s.feature_name === cmd;
+          return s.feature_name === parentFeature;
         });
 
         // Commands are enabled if they're enabled at both admin and guild level

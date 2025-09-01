@@ -35,11 +35,171 @@ module.exports = function startServer(client) {
 
   // Command server endpoints
   app.get("/api/commands/health", (_req, res) => {
-    res.json({ 
-      status: 'ok', 
+    res.json({
+      status: 'ok',
       timestamp: new Date().toISOString(),
-      port: PORT 
+      port: PORT
     });
+  });
+
+  // Get available commands for a guild
+  app.get("/api/guilds/:guildId/commands", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const guild = await client.guilds.fetch(guildId);
+
+      // Get all available commands from the command registry
+      const availableCommands = [];
+      if (client.commandManager) {
+        availableCommands.push(
+          { name: 'warn', description: 'Warn a user for breaking rules', category: 'moderation' },
+          { name: 'kick', description: 'Kick a user from the server', category: 'moderation' },
+          { name: 'ban', description: 'Ban a user from the server', category: 'moderation' },
+          { name: 'mute', description: 'Mute a user in the server', category: 'moderation' },
+          { name: 'role', description: 'Manage user roles', category: 'moderation' },
+          { name: 'custom', description: 'Execute custom commands', category: 'utilities' },
+          { name: 'sendverify', description: 'Send verification message', category: 'verification' },
+          { name: 'setverifylog', description: 'Set verification log channel', category: 'verification' },
+          { name: 'feedback', description: 'Submit feedback', category: 'utilities' },
+          { name: 'embed', description: 'Send embedded messages', category: 'utilities' }
+        );
+      }
+
+      // Get current command states for this guild
+      const [commandStates] = await appDb.query(
+        "SELECT command_name, enabled FROM guild_commands WHERE guild_id = ?",
+        [guildId]
+      );
+
+      // Merge available commands with their states
+      const commandsWithStates = availableCommands.map(cmd => {
+        const state = commandStates.find((s: any) => s.command_name === cmd.name);
+        return {
+          ...cmd,
+          enabled: state ? state.enabled : true // Default to enabled if not set
+        };
+      });
+
+      res.json({
+        success: true,
+        guildId,
+        commands: commandsWithStates
+      });
+
+    } catch (error) {
+      console.error('[COMMANDS-API] Error getting commands:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // Get command permissions (admin vs guild level controls)
+  app.get("/api/guilds/:guildId/command-permissions", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const guild = await client.guilds.fetch(guildId);
+
+      // Define all available commands and features
+      const allCommands = [
+        'warn', 'kick', 'ban', 'mute', 'role', 'custom', 'sendverify', 'setverifylog', 'feedback', 'embed'
+      ];
+
+      const allFeatures = [
+        'moderation', 'custom_commands', 'embedded_messages', 'reaction_roles', 'verification_system', 'feedback_system'
+      ];
+
+      // Get current command states for this guild
+      const [commandStates] = await appDb.query(
+        "SELECT command_name, enabled FROM guild_commands WHERE guild_id = ?",
+        [guildId]
+      );
+
+      // Get current feature states for this guild
+      const [featureStates] = await appDb.query(
+        "SELECT feature_name, enabled FROM guild_features WHERE guild_id = ?",
+        [guildId]
+      );
+
+      // Build permission object
+      const permissions = {
+        commands: {},
+        features: {}
+      };
+
+      // Process commands
+      allCommands.forEach(cmd => {
+        const guildState = commandStates.find((s: any) => s.command_name === cmd);
+        const featureState = featureStates.find((s: any) => s.feature_name === cmd);
+
+        // Commands are enabled if they're enabled at both admin and guild level
+        const adminEnabled = featureState ? featureState.enabled : true;
+        const guildEnabled = guildState ? guildState.enabled : true;
+
+        permissions.commands[cmd] = {
+          adminEnabled,
+          guildEnabled,
+          canModify: adminEnabled // Can only modify if admin allows it
+        };
+      });
+
+      // Process features
+      allFeatures.forEach(feature => {
+        const featureState = featureStates.find((s: any) => s.feature_name === feature);
+
+        // Features are enabled if they're enabled at both admin and guild level
+        const adminEnabled = featureState ? featureState.enabled : true;
+        const guildEnabled = featureState ? featureState.enabled : true;
+
+        permissions.features[feature] = {
+          adminEnabled,
+          guildEnabled,
+          canModify: adminEnabled // Can only modify if admin allows it
+        };
+      });
+
+      res.json(permissions);
+
+    } catch (error) {
+      console.error('[PERMISSIONS-API] Error getting permissions:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // Update command states for a guild
+  app.post("/api/guilds/:guildId/commands", async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const { commands } = req.body;
+
+      if (!Array.isArray(commands)) {
+        return res.status(400).json({ error: 'Commands must be an array' });
+      }
+
+      const guild = await client.guilds.fetch(guildId);
+
+      // Update each command state
+      for (const cmd of commands) {
+        await appDb.query(
+          `INSERT INTO guild_commands (guild_id, command_name, enabled)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_at = CURRENT_TIMESTAMP`,
+          [guildId, cmd.name, cmd.enabled ? 1 : 0]
+        );
+      }
+
+      // Trigger command update
+      if (client.commandManager) {
+        await client.commandManager.updateGuildCommands(guildId, {});
+      }
+
+      res.json({
+        success: true,
+        message: `Updated ${commands.length} commands for guild ${guildId}`
+      });
+
+    } catch (error) {
+      console.error('[COMMANDS-API] Error updating commands:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
   });
 
   app.post("/api/commands", async (req, res) => {

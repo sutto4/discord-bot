@@ -51,23 +51,59 @@ class CommandRegistry {
   async updateGuildCommands(guildId, features) {
     try {
       console.log(`[COMMAND-REGISTRY] Updating commands for guild ${guildId} with features:`, features);
-      
+
       // Get all commands for current features
-      const commands = this.getCommandsForFeatures(features);
-      
+      const allCommands = this.getCommandsForFeatures(features);
+
+      // Filter commands based on guild-specific settings
+      const enabledCommands = await this.filterEnabledCommands(guildId, allCommands);
+
       // Update commands with Discord API
       if (this.discordClient.application?.commands) {
-        await this.discordClient.application.commands.set(commands, guildId);
-        console.log(`[COMMAND-REGISTRY] Successfully updated commands for guild ${guildId}:`, commands);
+        await this.discordClient.application.commands.set(enabledCommands, guildId);
+        console.log(`[COMMAND-REGISTRY] Successfully updated commands for guild ${guildId}: ${enabledCommands.length}/${allCommands.length} enabled`);
       }
-      
+
       // Update local registry
-      this.commands.set(guildId, commands);
-      
-      return { success: true, commandsCount: commands.length };
+      this.commands.set(guildId, enabledCommands);
+
+      return { success: true, commandsCount: enabledCommands.length, totalCommands: allCommands.length };
     } catch (error) {
       console.error(`[COMMAND-REGISTRY] Error updating commands for guild ${guildId}:`, error);
       throw error;
+    }
+  }
+
+  async filterEnabledCommands(guildId, allCommands) {
+    try {
+      // Import database connection (this would need to be available in the service)
+      const { appDb } = require('../config/database');
+
+      // Get command states for this guild
+      const [commandStates] = await appDb.query(
+        "SELECT command_name, enabled FROM guild_commands WHERE guild_id = ?",
+        [guildId]
+      );
+
+      // Create a map of enabled commands
+      const enabledCommandMap = new Map();
+      commandStates.forEach((state: any) => {
+        enabledCommandMap.set(state.command_name, state.enabled === 1);
+      });
+
+      // Filter commands based on their enabled state
+      const enabledCommands = allCommands.filter(cmd => {
+        const enabled = enabledCommandMap.get(cmd.name);
+        return enabled !== false; // Default to enabled if not set
+      });
+
+      console.log(`[COMMAND-REGISTRY] Guild ${guildId}: ${enabledCommands.length}/${allCommands.length} commands enabled`);
+      return enabledCommands;
+
+    } catch (error) {
+      console.error(`[COMMAND-REGISTRY] Error filtering commands for guild ${guildId}:`, error);
+      // Return all commands if there's an error with the database
+      return allCommands;
     }
   }
 

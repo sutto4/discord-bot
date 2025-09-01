@@ -6,12 +6,12 @@ class CommandRegistry {
 
   async registerCommands(guildId, features) {
     try {
-      const commands = this.getCommandsForFeatures(features);
+      var commands = this.getCommandsForFeatures(features);
       
       console.log(`[COMMAND-REGISTRY] Registering commands for guild ${guildId}:`, commands);
       
       // Register commands with Discord API
-      if (this.discordClient.application?.commands) {
+      if (this.discordClient.application && this.discordClient.application.commands) {
         await this.discordClient.application.commands.set(commands, guildId);
         console.log(`[COMMAND-REGISTRY] Successfully registered ${commands.length} commands for guild ${guildId}`);
       } else {
@@ -33,7 +33,7 @@ class CommandRegistry {
       console.log(`[COMMAND-REGISTRY] Unregistering commands for guild ${guildId} features:`, features);
       
       // Remove commands from Discord API
-      if (this.discordClient.application?.commands) {
+      if (this.discordClient.application && this.discordClient.application.commands) {
         await this.discordClient.application.commands.set([], guildId);
         console.log(`[COMMAND-REGISTRY] Successfully unregistered all commands for guild ${guildId}`);
       }
@@ -53,13 +53,13 @@ class CommandRegistry {
       console.log(`[COMMAND-REGISTRY] Updating commands for guild ${guildId} with features:`, features);
 
       // Get all commands for current features
-      const allCommands = this.getCommandsForFeatures(features);
+      var allCommands = this.getCommandsForFeatures(features);
 
       // Filter commands based on guild-specific settings
-      const enabledCommands = await this.filterEnabledCommands(guildId, allCommands);
+      var enabledCommands = await this.filterEnabledCommands(guildId, allCommands);
 
       // Update commands with Discord API
-      if (this.discordClient.application?.commands) {
+      if (this.discordClient.application && this.discordClient.application.commands) {
         await this.discordClient.application.commands.set(enabledCommands, guildId);
         console.log(`[COMMAND-REGISTRY] Successfully updated commands for guild ${guildId}: ${enabledCommands.length}/${allCommands.length} enabled`);
       }
@@ -77,23 +77,24 @@ class CommandRegistry {
   async filterEnabledCommands(guildId, allCommands) {
     try {
       // Import database connection (this would need to be available in the service)
-      const { appDb } = require('../config/database');
+      var appDb = require('../config/database').appDb;
 
       // Get command states for this guild
-      const [commandStates] = await appDb.query(
+      var result = await appDb.query(
         "SELECT command_name, enabled FROM guild_commands WHERE guild_id = ?",
         [guildId]
       );
+      var commandStates = result[0];
 
       // Create a map of enabled commands
-      const enabledCommandMap = new Map();
-      commandStates.forEach((state: any) => {
+      var enabledCommandMap = new Map();
+      commandStates.forEach(function(state) {
         enabledCommandMap.set(state.command_name, state.enabled === 1);
       });
 
       // Filter commands based on their enabled state
-      const enabledCommands = allCommands.filter(cmd => {
-        const enabled = enabledCommandMap.get(cmd.name);
+      var enabledCommands = allCommands.filter(function(cmd) {
+        var enabled = enabledCommandMap.get(cmd.name);
         return enabled !== false; // Default to enabled if not set
       });
 
@@ -108,7 +109,7 @@ class CommandRegistry {
   }
 
   getCommandsForFeatures(features) {
-    const allCommands = [];
+    var allCommands = [];
     
     if (features.includes('moderation')) {
       allCommands.push(
@@ -335,16 +336,18 @@ class CommandRegistry {
   }
 
   getCommandsForGuild(guildId, enabledFeatures) {
-    const commands = this.getCommandsForFeatures(enabledFeatures);
+    var commands = this.getCommandsForFeatures(enabledFeatures);
     this.commands.set(guildId, commands);
     return commands;
   }
 
   getAllGuildCommands(guildFeatures) {
-    const allCommands = new Map();
+    var allCommands = new Map();
     
-    for (const [guildId, features] of guildFeatures) {
-      const commands = this.getCommandsForFeatures(features);
+    for (var i = 0; i < guildFeatures.length; i++) {
+      var guildId = guildFeatures[i][0];
+      var features = guildFeatures[i][1];
+      var commands = this.getCommandsForFeatures(features);
       allCommands.set(guildId, commands);
       this.commands.set(guildId, commands);
     }

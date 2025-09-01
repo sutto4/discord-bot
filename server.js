@@ -45,11 +45,11 @@ module.exports = function startServer(client) {
   // Get available commands for a guild
   app.get("/api/guilds/:guildId/commands", async (req, res) => {
     try {
-      const { guildId } = req.params;
-      const guild = await client.guilds.fetch(guildId);
+      var guildId = req.params.guildId;
+      var guild = await client.guilds.fetch(guildId);
 
       // Get all available commands from the command registry
-      const availableCommands = [];
+      var availableCommands = [];
       if (client.commandManager) {
         availableCommands.push(
           { name: 'warn', description: 'Warn a user for breaking rules', category: 'moderation' },
@@ -66,17 +66,22 @@ module.exports = function startServer(client) {
       }
 
       // Get current command states for this guild
-      const [commandStates] = await appDb.query(
+      var commandStatesResult = await appDb.query(
         "SELECT command_name, enabled FROM guild_commands WHERE guild_id = ?",
         [guildId]
       );
+      var commandStates = commandStatesResult[0];
 
       // Merge available commands with their states
-      const commandsWithStates = availableCommands.map(cmd => {
-        const state = commandStates.find((s: any) => s.command_name === cmd.name);
+      var commandsWithStates = availableCommands.map(function(cmd) {
+        var state = commandStates.find(function(s) {
+          return s.command_name === cmd.name;
+        });
         return {
-          ...cmd,
-          enabled: state ? state.enabled : true // Default to enabled if not set
+          name: cmd.name,
+          description: cmd.description,
+          category: cmd.category,
+          enabled: state ? (state.enabled === 1) : true // Default to enabled if not set
         };
       });
 
@@ -95,63 +100,71 @@ module.exports = function startServer(client) {
   // Get command permissions (admin vs guild level controls)
   app.get("/api/guilds/:guildId/command-permissions", async (req, res) => {
     try {
-      const { guildId } = req.params;
-      const guild = await client.guilds.fetch(guildId);
+      var guildId = req.params.guildId;
+      var guild = await client.guilds.fetch(guildId);
 
       // Define all available commands and features
-      const allCommands = [
+      var allCommands = [
         'warn', 'kick', 'ban', 'mute', 'role', 'custom', 'sendverify', 'setverifylog', 'feedback', 'embed'
       ];
 
-      const allFeatures = [
+      var allFeatures = [
         'moderation', 'custom_commands', 'embedded_messages', 'reaction_roles', 'verification_system', 'feedback_system'
       ];
 
       // Get current command states for this guild
-      const [commandStates] = await appDb.query(
+      var commandStatesResult = await appDb.query(
         "SELECT command_name, enabled FROM guild_commands WHERE guild_id = ?",
         [guildId]
       );
+      var commandStates = commandStatesResult[0];
 
       // Get current feature states for this guild
-      const [featureStates] = await appDb.query(
+      var featureStatesResult = await appDb.query(
         "SELECT feature_name, enabled FROM guild_features WHERE guild_id = ?",
         [guildId]
       );
+      var featureStates = featureStatesResult[0];
 
       // Build permission object
-      const permissions = {
+      var permissions = {
         commands: {},
         features: {}
       };
 
       // Process commands
-      allCommands.forEach(cmd => {
-        const guildState = commandStates.find((s: any) => s.command_name === cmd);
-        const featureState = featureStates.find((s: any) => s.feature_name === cmd);
+      allCommands.forEach(function(cmd) {
+        var guildState = commandStates.find(function(s) {
+          return s.command_name === cmd;
+        });
+        var featureState = featureStates.find(function(s) {
+          return s.feature_name === cmd;
+        });
 
         // Commands are enabled if they're enabled at both admin and guild level
-        const adminEnabled = featureState ? featureState.enabled : true;
-        const guildEnabled = guildState ? guildState.enabled : true;
+        var adminEnabled = featureState ? featureState.enabled : true;
+        var guildEnabled = guildState ? guildState.enabled : true;
 
         permissions.commands[cmd] = {
-          adminEnabled,
-          guildEnabled,
+          adminEnabled: adminEnabled,
+          guildEnabled: guildEnabled,
           canModify: adminEnabled // Can only modify if admin allows it
         };
       });
 
       // Process features
-      allFeatures.forEach(feature => {
-        const featureState = featureStates.find((s: any) => s.feature_name === feature);
+      allFeatures.forEach(function(feature) {
+        var featureState = featureStates.find(function(s) {
+          return s.feature_name === feature;
+        });
 
         // Features are enabled if they're enabled at both admin and guild level
-        const adminEnabled = featureState ? featureState.enabled : true;
-        const guildEnabled = featureState ? featureState.enabled : true;
+        var adminEnabled = featureState ? featureState.enabled : true;
+        var guildEnabled = featureState ? featureState.enabled : true;
 
         permissions.features[feature] = {
-          adminEnabled,
-          guildEnabled,
+          adminEnabled: adminEnabled,
+          guildEnabled: guildEnabled,
           canModify: adminEnabled // Can only modify if admin allows it
         };
       });
@@ -167,17 +180,18 @@ module.exports = function startServer(client) {
   // Update command states for a guild
   app.post("/api/guilds/:guildId/commands", async (req, res) => {
     try {
-      const { guildId } = req.params;
-      const { commands } = req.body;
+      var guildId = req.params.guildId;
+      var commands = req.body.commands;
 
       if (!Array.isArray(commands)) {
         return res.status(400).json({ error: 'Commands must be an array' });
       }
 
-      const guild = await client.guilds.fetch(guildId);
+      var guild = await client.guilds.fetch(guildId);
 
       // Update each command state
-      for (const cmd of commands) {
+      for (var i = 0; i < commands.length; i++) {
+        var cmd = commands[i];
         await appDb.query(
           `INSERT INTO guild_commands (guild_id, command_name, enabled)
            VALUES (?, ?, ?)
@@ -204,7 +218,9 @@ module.exports = function startServer(client) {
 
   app.post("/api/commands", async (req, res) => {
     try {
-      const { guildId, action, features } = req.body;
+      var guildId = req.body.guildId;
+      var action = req.body.action;
+      var features = req.body.features;
       
       console.log(`[COMMAND-SERVER] Received command update:`, { guildId, action, features });
 
@@ -219,7 +235,7 @@ module.exports = function startServer(client) {
       }
 
       // Update commands for the guild
-      const result = await commandManager.updateGuildCommands(guildId, features);
+      var result = await commandManager.updateGuildCommands(guildId, features);
       
       res.json({ success: true, result });
 
@@ -231,7 +247,7 @@ module.exports = function startServer(client) {
 
   app.get("/api/commands", async (req, res) => {
     try {
-      const { guildId } = req.query;
+      var guildId = req.query.guildId;
 
       if (!guildId) {
         return res.status(400).json({ error: 'Missing guildId parameter' });
@@ -257,16 +273,18 @@ module.exports = function startServer(client) {
   // Get all guilds where the bot is installed
   app.get("/api/guilds", async (_req, res) => {
     try {
-      const [rows] = await appDb.query("SELECT guild_id, guild_name, status FROM guilds WHERE status = 'active'");
+      var guildsResult = await appDb.query("SELECT guild_id, guild_name, status FROM guilds WHERE status = 'active'");
+      var rows = guildsResult[0];
       
       // Get detailed guild info including member and role counts
       // Filter out guilds that the bot can no longer access
-      const guilds = [];
+      var guilds = [];
 
-      for (const row of rows) {
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
         try {
           console.log(`🔍 Fetching details for guild: ${row.guild_name} (${row.guild_id})`);
-          const guild = await client.guilds.fetch(row.guild_id);
+          var guild = await client.guilds.fetch(row.guild_id);
           console.log(`✅ Fetched guild: ${guild.name}, members: ${guild.memberCount}, roles: ${guild.roles.cache.size}`);
 
           await guild.roles.fetch();
@@ -359,7 +377,7 @@ module.exports = function startServer(client) {
   }
 
   async function buildFeatureFlags(guildId) {
-    const features = {};
+    var features = {};
     try {
       const [rows] = await appDb.query(
         "SELECT feature_name, enabled FROM guild_features WHERE guild_id = ?",
@@ -382,7 +400,7 @@ module.exports = function startServer(client) {
       "SELECT accountid, `group` FROM accounts_groups"
     );
 
-    const accountByDiscord = new Map(); // discordUserId -> { accountid }
+    var accountByDiscord = new Map(); // discordUserId -> { accountid }
     for (const r of accounts) {
       accountByDiscord.set(String(r.discord), { accountid: String(r.accountid) });
     }
@@ -633,11 +651,11 @@ module.exports = function startServer(client) {
         return {
           guildId: guild.id,
           discordUserId: m.id,
-          username: m.user?.username ?? m.user?.globalName ?? "unknown",
+          username: (m.user && m.user.username) || (m.user && m.user.globalName) || "unknown",
           roleIds: Array.from(m.roles.cache.keys()),
           accountid,
           groups,
-          avatar: m.user?.avatar ?? null, // Discord avatar hash (string or null)
+          avatar: (m.user && m.user.avatar) || null, // Discord avatar hash (string or null)
           avatarUrl: toAvatarUrl(m.user, 64), // Full CDN URL for avatar (always present, fallback to default)
             joinedAt: m.joinedAt ?? null, // Date the user joined the server
         };
@@ -675,11 +693,11 @@ module.exports = function startServer(client) {
         return {
           guildId: guild.id,
           discordUserId: m.id,
-          username: m.user?.username ?? m.user?.globalName ?? "unknown",
+          username: (m.user && m.user.username) || (m.user && m.user.globalName) || "unknown",
           roleIds: Array.from(m.roles.cache.keys()),
           accountid,
           groups,
-          avatar: m.user?.avatar ?? null, // Discord avatar hash (string or null)
+          avatar: (m.user && m.user.avatar) || null, // Discord avatar hash (string or null)
           avatarUrl: toAvatarUrl(m.user, 64), // Full CDN URL for avatar (always present, fallback to default)
         };
       });
@@ -729,11 +747,11 @@ module.exports = function startServer(client) {
         return {
           guildId: guild.id,
           discordUserId: m.id,
-          username: m.user?.username ?? m.user?.globalName ?? "unknown",
+          username: (m.user && m.user.username) || (m.user && m.user.globalName) || "unknown",
           roleIds: Array.from(m.roles.cache.keys()),
           accountid,
           groups,
-          avatar: m.user?.avatar ?? null, // Discord avatar hash (string or null)
+          avatar: (m.user && m.user.avatar) || null, // Discord avatar hash (string or null)
           avatarUrl: toAvatarUrl(m.user, 64), // Full CDN URL for avatar (always present, fallback to default)
         };
       });

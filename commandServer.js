@@ -9,6 +9,12 @@ class CommandServer {
   }
 
   start() {
+    // Check if server is already running
+    if (this.server && this.server.listening) {
+      console.log(`[COMMAND-SERVER] Command server is already running on port ${this.port}`);
+      return;
+    }
+
     this.server = http.createServer(async (req, res) => {
       // Set CORS headers
       res.setHeader('Access-Control-Allow-Origin', '*');
@@ -83,6 +89,14 @@ class CommandServer {
 
     this.server.listen(this.port, () => {
       console.log(`[COMMAND-SERVER] Command server listening on port ${this.port}`);
+    }).on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        console.error(`[COMMAND-SERVER] Port ${this.port} is already in use. Command server will not start.`);
+        console.error(`[COMMAND-SERVER] This might be due to another instance running or a different service using the port.`);
+        console.error(`[COMMAND-SERVER] The bot will continue running without the command server.`);
+      } else {
+        console.error(`[COMMAND-SERVER] Failed to start command server:`, error);
+      }
     });
   }
 
@@ -91,6 +105,10 @@ class CommandServer {
       this.server.close();
       console.log('[COMMAND-SERVER] Command server stopped');
     }
+  }
+
+  isRunning() {
+    return this.server && this.server.listening;
   }
 }
 

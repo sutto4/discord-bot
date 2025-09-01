@@ -5,6 +5,8 @@ const path = require('node:path');
 const syncDonators = require('../jobs/syncDonators');
 const { processCreatorAlerts } = require('../jobs/creatorAlerts');
 const { applyBotCustomizationForAllGuilds } = require('../jobs/botCustomization');
+const { CommandManager } = require('../commandManager');
+const { CommandServer } = require('../commandServer');
 
 // Create Discord client with required intents
 const client = new Client({
@@ -27,6 +29,13 @@ const client = new Client({
 });
 
 client.commands = new Collection();
+
+// Initialize command manager and server
+const commandManager = new CommandManager(client);
+const commandServer = new CommandServer(commandManager, 3001);
+
+// Attach command manager to client for access in event handlers
+client.commandManager = commandManager;
 
 // Load slash commands
 const commandsPath = path.join(__dirname, '../commands');
@@ -53,6 +62,10 @@ for (const file of eventFiles) {
 // Donator sync on startup + interval
 client.once('ready', async () => {
 	console.log(`Logged in as ${client.user.tag}`);
+
+	// Start the command server for web app communication
+	commandServer.start();
+	console.log('[BOT] Command server started on port 3001');
 
 	await syncDonators(client); // Run once on startup
 

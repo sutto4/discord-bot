@@ -4,64 +4,61 @@ class CommandManager {
   constructor(client) {
     this.client = client;
     this.commandRegistry = new CommandRegistry(client);
-    this.setupCommandHandler();
   }
 
-  setupCommandHandler() {
-    // Handle slash command interactions
-    this.client.on('interactionCreate', async (interaction) => {
-      if (!interaction.isChatInputCommand()) return;
+  // Method to handle interactions - called from existing event system
+  async handleInteraction(interaction) {
+    if (!interaction.isChatInputCommand()) return;
 
-      const { commandName } = interaction;
-      console.log(`[COMMAND-MANAGER] Command executed: ${commandName} by ${interaction.user.tag}`);
+    const { commandName } = interaction;
+    console.log(`[COMMAND-MANAGER] Command executed: ${commandName} by ${interaction.user.tag}`);
 
-      try {
-        // Route commands based on name
-        switch (commandName) {
-          case 'warn':
-            await this.handleWarn(interaction);
-            break;
-          case 'kick':
-            await this.handleKick(interaction);
-            break;
-          case 'ban':
-            await this.handleBan(interaction);
-            break;
-          case 'mute':
-            await this.handleMute(interaction);
-            break;
-          case 'role':
-            await this.handleRole(interaction);
-            break;
-          case 'custom':
-            await this.handleCustom(interaction);
-            break;
-          case 'sendverify':
-            await this.handleSendVerify(interaction);
-            break;
-          case 'setverifylog':
-            await this.handleSetVerifyLog(interaction);
-            break;
-          case 'feedback':
-            await this.handleFeedback(interaction);
-            break;
-          case 'embed':
-            await this.handleEmbed(interaction);
-            break;
-          default:
-            await interaction.reply({ 
-              content: 'Unknown command', 
-              ephemeral: true 
-            });
-        }
-      } catch (error) {
-        console.error(`[COMMAND-MANAGER] Error handling command ${commandName}:`, error);
-        await interaction.reply({ 
-          content: 'An error occurred while executing this command.', 
-          ephemeral: true 
-        });
+    try {
+      // Route commands based on name
+      switch (commandName) {
+        case 'warn':
+          await this.handleWarn(interaction);
+          break;
+        case 'kick':
+          await this.handleKick(interaction);
+          break;
+        case 'ban':
+          await this.handleBan(interaction);
+          break;
+        case 'mute':
+          await this.handleMute(interaction);
+          break;
+        case 'role':
+          await this.handleRole(interaction);
+          break;
+        case 'custom':
+          await this.handleCustom(interaction);
+          break;
+        case 'sendverify':
+          await this.handleSendVerify(interaction);
+          break;
+        case 'setverifylog':
+          await this.handleSetVerifyLog(interaction);
+          break;
+        case 'feedback':
+          await this.handleFeedback(interaction);
+          break;
+        case 'embed':
+          await this.handleEmbed(interaction);
+          break;
+        default:
+          await interaction.reply({ 
+            content: 'Unknown command', 
+            ephemeral: true 
+          });
       }
-    });
+    } catch (error) {
+      console.error(`[COMMAND-MANAGER] Error handling command ${commandName}:`, error);
+      await interaction.reply({ 
+        content: 'An error occurred while executing this command.', 
+        ephemeral: true 
+      });
+    }
   }
 
   async handleWarn(interaction) {

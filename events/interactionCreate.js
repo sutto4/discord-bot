@@ -551,6 +551,13 @@ module.exports = {
 
 		// Slash command handler
 		if (interaction.isChatInputCommand()) {
+			// First try the CommandManager for dynamic commands
+			if (interaction.client.commandManager) {
+				await interaction.client.commandManager.handleInteraction(interaction);
+				return;
+			}
+
+			// Fallback to existing command system
 			const command = interaction.client.commands.get(interaction.commandName);
 			if (!command) return;
 

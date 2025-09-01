@@ -33,6 +33,67 @@ module.exports = function startServer(client) {
   // Health
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
+  // Command server endpoints
+  app.get("/api/commands/health", (_req, res) => {
+    res.json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      port: PORT 
+    });
+  });
+
+  app.post("/api/commands", async (req, res) => {
+    try {
+      const { guildId, action, features } = req.body;
+      
+      console.log(`[COMMAND-SERVER] Received command update:`, { guildId, action, features });
+
+      if (!guildId || !action || !features) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      // Get the command manager from the client
+      const commandManager = req.client.commandManager;
+      if (!commandManager) {
+        return res.status(500).json({ error: 'Command manager not available' });
+      }
+
+      // Update commands for the guild
+      const result = await commandManager.updateGuildCommands(guildId, features);
+      
+      res.json({ success: true, result });
+
+    } catch (error) {
+      console.error('[COMMAND-SERVER] Error processing command update:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.get("/api/commands", async (req, res) => {
+    try {
+      const { guildId } = req.query;
+
+      if (!guildId) {
+        return res.status(400).json({ error: 'Missing guildId parameter' });
+      }
+
+      // Get the command manager from the client
+      const commandManager = req.client.commandManager;
+      if (!commandManager) {
+        return res.status(500).json({ error: 'Command manager not available' });
+      }
+
+      // Get current commands for the guild
+      const commands = commandManager.getGuildCommands(guildId);
+      
+      res.json({ success: true, guildId, commands });
+
+    } catch (error) {
+      console.error('[COMMAND-SERVER] Error getting commands:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // Get all guilds where the bot is installed
   app.get("/api/guilds", async (_req, res) => {
     try {
@@ -785,7 +846,23 @@ module.exports = function startServer(client) {
       const { guildId, userId, roleId } = req.params;
       const actorId = req.query.actor ? String(req.query.actor) : null;
       const guild = await client.guilds.fetch(guildId);
-      const member = await guild.members.fetch(userId);
+
+      // Handle member fetch with proper error handling
+      let member;
+      try {
+        member = await guild.members.fetch(userId);
+      } catch (memberError) {
+        if (memberError.code === 10007) { // Unknown Member
+          console.log(`[API-ROLE-ADD] User ${userId} is no longer a member of guild ${guildId}`);
+          return res.status(404).json({
+            error: "user_not_found",
+            message: "This user is no longer a member of the server. They may have left or been removed.",
+            userId: userId
+          });
+        }
+        throw memberError;
+      }
+
       const role = await guild.roles.fetch(roleId);
       if (!role) return res.status(404).json({ error: "role_not_found" });
       if (!role.editable)
@@ -821,7 +898,23 @@ module.exports = function startServer(client) {
       const { guildId, userId, roleId } = req.params;
       const actorId = req.query.actor ? String(req.query.actor) : null;
       const guild = await client.guilds.fetch(guildId);
-      const member = await guild.members.fetch(userId);
+
+      // Handle member fetch with proper error handling
+      let member;
+      try {
+        member = await guild.members.fetch(userId);
+      } catch (memberError) {
+        if (memberError.code === 10007) { // Unknown Member
+          console.log(`[API-ROLE-REMOVE] User ${userId} is no longer a member of guild ${guildId}`);
+          return res.status(404).json({
+            error: "user_not_found",
+            message: "This user is no longer a member of the server. They may have left or been removed.",
+            userId: userId
+          });
+        }
+        throw memberError;
+      }
+
       const role = await guild.roles.fetch(roleId);
       if (!role) return res.status(404).json({ error: "role_not_found" });
       if (!role.editable)
@@ -922,8 +1015,19 @@ module.exports = function startServer(client) {
       const guild = await client.guilds.fetch(guildId);
 
       // Get the user member object
-      const member = await guild.members.fetch(userId).catch(() => null);
-      if (!member) {
+      let member;
+      try {
+        member = await guild.members.fetch(userId);
+      } catch (memberError) {
+        if (memberError.code === 10007) { // Unknown Member
+          console.log(`[USER-INFO] User ${userId} is no longer a member of guild ${guildId}`);
+          return res.status(404).json({
+            error: "user_not_found",
+            message: "This user is no longer a member of the server. They may have left or been removed.",
+            userId: userId
+          });
+        }
+        console.error(`[USER-INFO] Error fetching member ${userId}:`, memberError);
         return res.status(404).json({ error: "User not found in guild" });
       }
 
@@ -1021,7 +1125,16 @@ module.exports = function startServer(client) {
       let member;
       try {
         member = await guild.members.fetch(targetUserId);
-      } catch (error) {
+      } catch (memberError) {
+        if (memberError.code === 10007) { // Unknown Member
+          console.log(`[MODERATION] User ${targetUserId} is no longer a member of guild ${guildId}`);
+          return res.status(404).json({
+            error: "user_not_found",
+            message: "This user is no longer a member of the server. They may have left or been removed.",
+            userId: targetUserId
+          });
+        }
+        console.error(`[MODERATION] Error fetching member ${targetUserId}:`, memberError);
         return res.status(404).json({ error: "Member not found in guild" });
       }
 
@@ -1107,6 +1220,54 @@ module.exports = function startServer(client) {
 
   // Run initial sync after 30 seconds (to let bot fully connect)
   setTimeout(syncMemberCounts, 30000);
+
+  // File watcher for command updates (fallback)
+  const fs = require('fs');
+  const path = require('path');
+  const commandFile = path.join(process.cwd(), 'command-updates.json');
+  let lastProcessedUpdate = null;
+
+  // Function to process command updates from file
+  async function processCommandUpdates() {
+    try {
+      if (!fs.existsSync(commandFile)) return;
+
+      const updates = JSON.parse(fs.readFileSync(commandFile, 'utf8'));
+      if (!Array.isArray(updates) || updates.length === 0) return;
+
+      // Get the latest update
+      const latestUpdate = updates[updates.length - 1];
+      
+      // Check if we've already processed this update
+      if (lastProcessedUpdate && lastProcessedUpdate.timestamp === latestUpdate.timestamp) {
+        return;
+      }
+
+      console.log('[COMMAND-FILE] Processing command update from file:', latestUpdate);
+
+      // Get the command manager from the client
+      const commandManager = client.commandManager;
+      if (!commandManager) {
+        console.error('[COMMAND-FILE] Command manager not available');
+        return;
+      }
+
+      // Process the update
+      const result = await commandManager.updateGuildCommands(
+        latestUpdate.guildId, 
+        latestUpdate.features
+      );
+
+      console.log('[COMMAND-FILE] Command update processed successfully:', result);
+      lastProcessedUpdate = latestUpdate;
+
+    } catch (error) {
+      console.error('[COMMAND-FILE] Error processing command updates:', error);
+    }
+  }
+
+  // Check for command updates every 5 seconds
+  setInterval(processCommandUpdates, 5000);
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`API server listening on port ${PORT}`);

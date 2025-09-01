@@ -5,13 +5,32 @@ async function testGuildCommandsTable() {
   let connection;
   
   try {
-    // Connect to database
-    connection = await mysql.createConnection({
-      host: process.env.DB_HOST,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASS,
-      database: process.env.DB_NAME,
+    // Debug environment variables
+    console.log('Environment variables:');
+    console.log('APP_DB_HOST:', process.env.APP_DB_HOST);
+    console.log('BOT_DB_HOST:', process.env.BOT_DB_HOST);
+    console.log('APP_DB_USER:', process.env.APP_DB_USER);
+    console.log('BOT_DB_USER:', process.env.BOT_DB_USER);
+    console.log('APP_DB_PASSWORD:', process.env.APP_DB_PASSWORD ? '[SET]' : '[NOT SET]');
+    console.log('BOT_DB_PASSWORD:', process.env.BOT_DB_PASSWORD ? '[SET]' : '[NOT SET]');
+    console.log('APP_DB_NAME:', process.env.APP_DB_NAME);
+    console.log('BOT_DB_NAME:', process.env.BOT_DB_NAME);
+    
+    // Connect to database using the same config as the bot
+    const dbConfig = {
+      host: process.env.APP_DB_HOST || process.env.BOT_DB_HOST || '127.0.0.1',
+      user: process.env.APP_DB_USER || process.env.BOT_DB_USER || 'root',
+      password: process.env.APP_DB_PASSWORD || process.env.BOT_DB_PASSWORD || '',
+      database: process.env.APP_DB_NAME || process.env.BOT_DB_NAME || 'chester_bot',
+      port: Number(process.env.APP_DB_PORT || process.env.BOT_DB_PORT || 3306),
+    };
+    
+    console.log('Database config:', {
+      ...dbConfig,
+      password: dbConfig.password ? '[SET]' : '[NOT SET]'
     });
+    
+    connection = await mysql.createConnection(dbConfig);
 
     console.log('Connected to database');
 
@@ -20,7 +39,7 @@ async function testGuildCommandsTable() {
       SELECT TABLE_NAME 
       FROM information_schema.TABLES 
       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'guild_commands'
-    `, [process.env.DB_NAME]);
+    `, [process.env.APP_DB_NAME || process.env.BOT_DB_NAME || 'chester_bot']);
 
     if (tables.length === 0) {
       console.log('guild_commands table does not exist. Creating it...');

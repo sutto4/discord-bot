@@ -151,11 +151,16 @@ module.exports = function startServer(client) {
         // Commands are enabled if they're enabled at both admin and guild level
         var adminEnabled = featureState ? featureState.enabled : true;
         var guildEnabled = guildState ? guildState.enabled : true;
+        
+        // Guild can modify if:
+        // 1. Admin has enabled the feature, OR
+        // 2. Admin hasn't configured the feature (featureState is null)
+        var canModify = !featureState || featureState.enabled;
 
         permissions.commands[cmd.command_name] = {
           adminEnabled: adminEnabled,
           guildEnabled: guildEnabled,
-          canModify: adminEnabled // Can only modify if admin allows it
+          canModify: canModify
         };
       });
 

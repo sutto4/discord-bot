@@ -229,7 +229,10 @@ module.exports = function startServer(client) {
       // Trigger command update
       if (client.commandManager) {
         console.log(`[BOT-COMMANDS-API] Triggering command manager update for guild ${guildId}`);
-        await client.commandManager.updateGuildCommands(guildId, {});
+        // Extract enabled commands as features array
+        var enabledCommands = commands.filter(cmd => cmd.enabled).map(cmd => cmd.command_name);
+        console.log(`[BOT-COMMANDS-API] Enabled commands:`, enabledCommands);
+        await client.commandManager.updateGuildCommands(guildId, enabledCommands);
       } else {
         console.log(`[BOT-COMMANDS-API] No command manager available`);
       }

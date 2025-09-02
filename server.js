@@ -104,10 +104,12 @@ module.exports = function startServer(client) {
       var guildId = req.params.guildId;
       var guild = await client.guilds.fetch(guildId);
 
-      // Define all available commands and features
-      var allCommands = [
-        'warn', 'kick', 'ban', 'mute', 'role', 'custom', 'sendverify', 'setverifylog', 'feedback', 'embed'
-      ];
+      // Get all available commands from the database
+      var allCommandsResult = await appDb.query(
+        "SELECT DISTINCT command_name, feature_name FROM guild_commands WHERE guild_id = ?",
+        [guildId]
+      );
+      var allCommands = allCommandsResult[0];
 
       var allFeatures = [
         'moderation', 'custom_commands', 'embedded_messages', 'reaction_roles', 'verification_system', 'feedback_system'
@@ -115,7 +117,7 @@ module.exports = function startServer(client) {
 
       // Get current command states for this guild
       var commandStatesResult = await appDb.query(
-        "SELECT command_name, enabled FROM guild_commands WHERE guild_id = ?",
+        "SELECT command_name, feature_name, enabled FROM guild_commands WHERE guild_id = ?",
         [guildId]
       );
       var commandStates = commandStatesResult[0];
@@ -136,24 +138,11 @@ module.exports = function startServer(client) {
       // Process commands
       allCommands.forEach(function(cmd) {
         var guildState = commandStates.find(function(s) {
-          return s.command_name === cmd;
+          return s.command_name === cmd.command_name;
         });
         
-        // Map commands to their parent features
-        var parentFeature = null;
-        if (['warn', 'kick', 'ban', 'mute'].includes(cmd)) {
-          parentFeature = 'moderation';
-        } else if (['role'].includes(cmd)) {
-          parentFeature = 'reaction_roles';
-        } else if (['custom'].includes(cmd)) {
-          parentFeature = 'custom_commands';
-        } else if (['sendverify', 'setverifylog'].includes(cmd)) {
-          parentFeature = 'verification_system';
-        } else if (['feedback'].includes(cmd)) {
-          parentFeature = 'feedback_system';
-        } else if (['embed'].includes(cmd)) {
-          parentFeature = 'embedded_messages';
-        }
+        // Use feature_name from database instead of hardcoded mapping
+        var parentFeature = cmd.feature_name;
         
         var featureState = featureStates.find(function(s) {
           return s.feature_name === parentFeature;
@@ -163,7 +152,7 @@ module.exports = function startServer(client) {
         var adminEnabled = featureState ? featureState.enabled : true;
         var guildEnabled = guildState ? guildState.enabled : true;
 
-        permissions.commands[cmd] = {
+        permissions.commands[cmd.command_name] = {
           adminEnabled: adminEnabled,
           guildEnabled: guildEnabled,
           canModify: adminEnabled // Can only modify if admin allows it

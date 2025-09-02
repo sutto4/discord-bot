@@ -35,6 +35,7 @@ module.exports = function startServer(client) {
 
   // Command server endpoints
   app.get("/api/commands/health", (_req, res) => {
+    console.log(`🚨🚨🚨 HEALTH CHECK REQUESTED! 🚨🚨🚨`);
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),

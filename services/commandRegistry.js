@@ -113,6 +113,16 @@ class CommandRegistry {
   getCommandsForFeatures(features) {
     var allCommands = [];
     
+    // Check if we're getting individual command names or feature names
+    var isIndividualCommands = features.some(function(feature) {
+      return ['warn', 'kick', 'ban', 'mute', 'unmute', 'role', 'custom', 'sendverify', 'setverifylog', 'feedback', 'embed'].includes(feature);
+    });
+    
+    if (isIndividualCommands) {
+      // Handle individual command names
+      return this.getCommandsForIndividualCommands(features);
+    }
+    
     if (features.includes('moderation')) {
       allCommands.push(
         { 
@@ -334,6 +344,213 @@ class CommandRegistry {
       );
     }
 
+    return allCommands;
+  }
+
+  getCommandsForIndividualCommands(commandNames) {
+    var allCommands = [];
+    
+    // Define all available commands
+    var commandDefinitions = {
+      'warn': {
+        name: 'warn',
+        description: 'Warn a user for breaking rules',
+        options: [
+          {
+            name: 'user',
+            description: 'The user to warn',
+            type: 6, // USER type
+            required: true
+          },
+          {
+            name: 'reason',
+            description: 'Reason for the warning',
+            type: 3, // STRING type
+            required: false
+          }
+        ]
+      },
+      'kick': {
+        name: 'kick',
+        description: 'Kick a user from the server',
+        options: [
+          {
+            name: 'user',
+            description: 'The user to kick',
+            type: 6,
+            required: true
+          },
+          {
+            name: 'reason',
+            description: 'Reason for the kick',
+            type: 3,
+            required: false
+          }
+        ]
+      },
+      'ban': {
+        name: 'ban',
+        description: 'Ban a user from the server',
+        options: [
+          {
+            name: 'user',
+            description: 'The user to ban',
+            type: 6,
+            required: true
+          },
+          {
+            name: 'reason',
+            description: 'Reason for the ban',
+            type: 3,
+            required: false
+          },
+          {
+            name: 'duration',
+            description: 'Duration of the ban (e.g., 7d, 30d)',
+            type: 3,
+            required: false
+          }
+        ]
+      },
+      'mute': {
+        name: 'mute',
+        description: 'Mute a user in the server',
+        options: [
+          {
+            name: 'user',
+            description: 'The user to mute',
+            type: 6,
+            required: true
+          },
+          {
+            name: 'duration',
+            description: 'Duration of the mute (e.g., 1h, 7d)',
+            type: 3,
+            required: true
+          },
+          {
+            name: 'reason',
+            description: 'Reason for the mute',
+            type: 3,
+            required: false
+          }
+        ]
+      },
+      'unmute': {
+        name: 'unmute',
+        description: 'Unmute a user in the server',
+        options: [
+          {
+            name: 'user',
+            description: 'The user to unmute',
+            type: 6,
+            required: true
+          }
+        ]
+      },
+      'role': {
+        name: 'role',
+        description: 'Manage user roles',
+        options: [
+          {
+            name: 'action',
+            description: 'Action to perform',
+            type: 3,
+            required: true,
+            choices: [
+              { name: 'Add', value: 'add' },
+              { name: 'Remove', value: 'remove' }
+            ]
+          },
+          {
+            name: 'user',
+            description: 'The user to manage',
+            type: 6,
+            required: true
+          },
+          {
+            name: 'role',
+            description: 'The role to add/remove',
+            type: 8, // ROLE type
+            required: true
+          }
+        ]
+      },
+      'custom': {
+        name: 'custom',
+        description: 'Execute custom commands',
+        options: [
+          {
+            name: 'command',
+            description: 'The custom command to execute',
+            type: 3,
+            required: true
+          }
+        ]
+      },
+      'sendverify': {
+        name: 'sendverify',
+        description: 'Send verification message',
+        options: []
+      },
+      'setverifylog': {
+        name: 'setverifylog',
+        description: 'Set verification log channel',
+        options: [
+          {
+            name: 'channel',
+            description: 'The channel to set as verification log',
+            type: 7, // CHANNEL type
+            required: true
+          }
+        ]
+      },
+      'feedback': {
+        name: 'feedback',
+        description: 'Submit feedback',
+        options: [
+          {
+            name: 'message',
+            description: 'Your feedback message',
+            type: 3,
+            required: true
+          }
+        ]
+      },
+      'embed': {
+        name: 'embed',
+        description: 'Send embedded messages',
+        options: [
+          {
+            name: 'title',
+            description: 'Title of the embed',
+            type: 3,
+            required: false
+          },
+          {
+            name: 'description',
+            description: 'Description of the embed',
+            type: 3,
+            required: false
+          },
+          {
+            name: 'color',
+            description: 'Color of the embed (hex code)',
+            type: 3,
+            required: false
+          }
+        ]
+      }
+    };
+    
+    // Add commands for the requested command names
+    for (var i = 0; i < commandNames.length; i++) {
+      var commandName = commandNames[i];
+      if (commandDefinitions[commandName]) {
+        allCommands.push(commandDefinitions[commandName]);
+      }
+    }
+    
     return allCommands;
   }
 

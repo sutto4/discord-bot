@@ -505,6 +505,18 @@ class CommandRegistry {
           }
         ]
       },
+      'setmodlog': {
+        name: 'setmodlog',
+        description: 'Set moderation log channel',
+        options: [
+          {
+            name: 'channel',
+            description: 'The channel to set as moderation log',
+            type: 7, // CHANNEL type
+            required: true
+          }
+        ]
+      },
       'feedback': {
         name: 'feedback',
         description: 'Submit feedback',

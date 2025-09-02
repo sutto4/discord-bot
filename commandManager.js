@@ -43,6 +43,9 @@ class CommandManager {
         case 'setverifylog':
           await this.handleSetVerifyLog(interaction);
           break;
+        case 'setmodlog':
+          await this.handleSetModLog(interaction);
+          break;
         case 'feedback':
           await this.handleFeedback(interaction);
           break;
@@ -119,6 +122,12 @@ class CommandManager {
     // Reuse the existing setverifylog command handler
     const setVerifyLogCommand = require('./commands/setverifylog');
     await setVerifyLogCommand.execute(interaction);
+  }
+
+  async handleSetModLog(interaction) {
+    // Reuse the existing setmodlog command handler
+    const setModLogCommand = require('./commands/setmodlog');
+    await setModLogCommand.execute(interaction);
   }
 
   async handleFeedback(interaction) {

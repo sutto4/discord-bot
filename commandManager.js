@@ -66,37 +66,37 @@ class CommandManager {
 
   async handleWarn(interaction) {
     // Reuse the existing warn command handler
-    const warnCommand = require('../commands/warn');
+    const warnCommand = require('./commands/warn');
     await warnCommand.execute(interaction);
   }
 
   async handleKick(interaction) {
     // Reuse the existing kick command handler
-    const kickCommand = require('../commands/kick');
+    const kickCommand = require('./commands/kick');
     await kickCommand.execute(interaction);
   }
 
   async handleBan(interaction) {
     // Reuse the existing ban command handler
-    const banCommand = require('../commands/ban');
+    const banCommand = require('./commands/ban');
     await banCommand.execute(interaction);
   }
 
   async handleMute(interaction) {
     // Reuse the existing mute command handler
-    const muteCommand = require('../commands/mute');
+    const muteCommand = require('./commands/mute');
     await muteCommand.execute(interaction);
   }
 
   async handleUnmute(interaction) {
     // Reuse the existing unmute command handler
-    const unmuteCommand = require('../commands/unmute');
+    const unmuteCommand = require('./commands/unmute');
     await unmuteCommand.execute(interaction);
   }
 
   async handleRole(interaction) {
     // Role management is handled by syncroles command
-    const syncRolesCommand = require('../commands/syncroles');
+    const syncRolesCommand = require('./commands/syncroles');
     await syncRolesCommand.execute(interaction);
   }
 
@@ -111,19 +111,19 @@ class CommandManager {
 
   async handleSendVerify(interaction) {
     // Reuse the existing sendverify command handler
-    const sendVerifyCommand = require('../commands/sendverify');
+    const sendVerifyCommand = require('./commands/sendverify');
     await sendVerifyCommand.execute(interaction);
   }
 
   async handleSetVerifyLog(interaction) {
     // Reuse the existing setverifylog command handler
-    const setVerifyLogCommand = require('../commands/setverifylog');
+    const setVerifyLogCommand = require('./commands/setverifylog');
     await setVerifyLogCommand.execute(interaction);
   }
 
   async handleFeedback(interaction) {
     // Reuse the existing feedback command handler
-    const feedbackCommand = require('../commands/feedback');
+    const feedbackCommand = require('./commands/feedback');
     await feedbackCommand.execute(interaction);
   }
 

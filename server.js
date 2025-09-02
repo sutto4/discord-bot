@@ -148,18 +148,37 @@ module.exports = function startServer(client) {
           return s.feature_name === parentFeature;
         });
 
+        // Debug logging for setverifylog
+        if (cmd.command_name === 'setverifylog') {
+          console.log('🚨🚨🚨 SETVERIFYLOG DEBUG:', {
+            commandName: cmd.command_name,
+            parentFeature: parentFeature,
+            featureState: featureState,
+            allFeatureStates: featureStates,
+            guildState: guildState
+          });
+        }
+
         // Commands are enabled if they're enabled at both admin and guild level
-        var adminEnabled = featureState ? featureState.enabled : true;
-        var guildEnabled = guildState ? guildState.enabled : true;
+        var adminEnabled = featureState ? featureState.enabled : false; // Default to false if not configured
+        var guildEnabled = guildState ? guildState.enabled : false;
         
         // Guild can modify if:
-        // 1. Admin has enabled the feature, OR
-        // 2. Admin hasn't configured the feature (featureState is null)
-        var canModify = !featureState || featureState.enabled;
+        // 1. Admin has explicitly enabled the feature
+        var canModify = featureState && featureState.enabled;
         
-        // If admin has disabled the feature, guild cannot enable commands
-        if (featureState && !featureState.enabled) {
-          guildEnabled = false; // Force disable if admin disabled the feature
+        // If admin has disabled the feature OR not configured it, guild cannot enable commands
+        if (!featureState || !featureState.enabled) {
+          guildEnabled = false; // Force disable if admin disabled or hasn't configured the feature
+        }
+        
+        // Debug logging for setverifylog
+        if (cmd.command_name === 'setverifylog') {
+          console.log('🚨🚨🚨 SETVERIFYLOG FINAL:', {
+            adminEnabled: adminEnabled,
+            guildEnabled: guildEnabled,
+            canModify: canModify
+          });
         }
 
         permissions.commands[cmd.command_name] = {

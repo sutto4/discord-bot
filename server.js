@@ -156,6 +156,11 @@ module.exports = function startServer(client) {
         // 1. Admin has enabled the feature, OR
         // 2. Admin hasn't configured the feature (featureState is null)
         var canModify = !featureState || featureState.enabled;
+        
+        // If admin has disabled the feature, guild cannot enable commands
+        if (featureState && !featureState.enabled) {
+          guildEnabled = false; // Force disable if admin disabled the feature
+        }
 
         permissions.commands[cmd.command_name] = {
           adminEnabled: adminEnabled,

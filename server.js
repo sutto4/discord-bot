@@ -160,16 +160,17 @@ module.exports = function startServer(client) {
         }
 
         // Commands are enabled if they're enabled at both admin and guild level
-        var adminEnabled = featureState ? featureState.enabled : false; // Default to false if not configured
+        var adminEnabled = featureState ? featureState.enabled : true; // Default to true if not configured
         var guildEnabled = guildState ? guildState.enabled : false;
         
         // Guild can modify if:
-        // 1. Admin has explicitly enabled the feature
-        var canModify = featureState && featureState.enabled;
+        // 1. Admin hasn't configured the feature (featureState is null), OR
+        // 2. Admin has explicitly enabled the feature
+        var canModify = !featureState || featureState.enabled;
         
-        // If admin has disabled the feature OR not configured it, guild cannot enable commands
-        if (!featureState || !featureState.enabled) {
-          guildEnabled = false; // Force disable if admin disabled or hasn't configured the feature
+        // If admin has disabled the feature, guild cannot enable commands
+        if (featureState && !featureState.enabled) {
+          guildEnabled = false; // Force disable if admin disabled the feature
         }
         
         // Debug logging for setverifylog

@@ -54,9 +54,11 @@ class CommandRegistry {
 
       // Get all commands for current features
       var allCommands = this.getCommandsForFeatures(features);
+      console.log(`[COMMAND-REGISTRY] Generated ${allCommands.length} commands for features:`, allCommands.map(cmd => cmd.name));
 
-      // Filter commands based on guild-specific settings
-      var enabledCommands = await this.filterEnabledCommands(guildId, allCommands);
+      // When called from admin page, features already represent enabled commands
+      // So we don't need to filter - just use all commands for the given features
+      var enabledCommands = allCommands;
 
       // Update commands with Discord API
       if (this.discordClient.application && this.discordClient.application.commands) {

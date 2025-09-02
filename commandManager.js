@@ -28,6 +28,9 @@ class CommandManager {
         case 'mute':
           await this.handleMute(interaction);
           break;
+        case 'unmute':
+          await this.handleUnmute(interaction);
+          break;
         case 'role':
           await this.handleRole(interaction);
           break;
@@ -62,86 +65,39 @@ class CommandManager {
   }
 
   async handleWarn(interaction) {
-    const user = interaction.options.getUser('user');
-    const reason = interaction.options.getString('reason') || 'No reason provided';
-
-    await interaction.reply({
-      content: `⚠️ **Warning issued to ${user.tag}**\nReason: ${reason}`,
-      ephemeral: false
-    });
+    // Reuse the existing warn command handler
+    const warnCommand = require('../commands/warn');
+    await warnCommand.execute(interaction);
   }
 
   async handleKick(interaction) {
-    const user = interaction.options.getUser('user');
-    const reason = interaction.options.getString('reason') || 'No reason provided';
-
-    try {
-      await interaction.guild.members.kick(user, reason);
-      await interaction.reply({
-        content: `👢 **${user.tag} has been kicked**\nReason: ${reason}`,
-        ephemeral: false
-      });
-    } catch (error) {
-      await interaction.reply({
-        content: `❌ Failed to kick ${user.tag}: ${error.message}`,
-        ephemeral: true
-      });
-    }
+    // Reuse the existing kick command handler
+    const kickCommand = require('../commands/kick');
+    await kickCommand.execute(interaction);
   }
 
   async handleBan(interaction) {
-    const user = interaction.options.getUser('user');
-    const reason = interaction.options.getString('reason') || 'No reason provided';
-    const duration = interaction.options.getString('duration');
-
-    try {
-      await interaction.guild.members.ban(user, { reason });
-      await interaction.reply({
-        content: `🔨 **${user.tag} has been banned**\nReason: ${reason}${duration ? `\nDuration: ${duration}` : ''}`,
-        ephemeral: false
-      });
-    } catch (error) {
-      await interaction.reply({
-        content: `❌ Failed to ban ${user.tag}: ${error.message}`,
-        ephemeral: true
-      });
-    }
+    // Reuse the existing ban command handler
+    const banCommand = require('../commands/ban');
+    await banCommand.execute(interaction);
   }
 
   async handleMute(interaction) {
-    const user = interaction.options.getUser('user');
-    const duration = interaction.options.getString('duration');
-    const reason = interaction.options.getString('reason') || 'No reason provided';
+    // Reuse the existing mute command handler
+    const muteCommand = require('../commands/mute');
+    await muteCommand.execute(interaction);
+  }
 
-    await interaction.reply({
-      content: `🔇 **${user.tag} has been muted**\nDuration: ${duration}\nReason: ${reason}`,
-      ephemeral: false
-    });
+  async handleUnmute(interaction) {
+    // Reuse the existing unmute command handler
+    const unmuteCommand = require('../commands/unmute');
+    await unmuteCommand.execute(interaction);
   }
 
   async handleRole(interaction) {
-    const action = interaction.options.getString('action');
-    const role = interaction.options.getRole('role');
-
-    let content = '';
-    switch (action) {
-      case 'add':
-        content = `➕ **Role management**: Add role ${role?.name || 'N/A'}`;
-        break;
-      case 'remove':
-        content = `➖ **Role management**: Remove role ${role?.name || 'N/A'}`;
-        break;
-      case 'list':
-        content = `📋 **Role management**: List roles`;
-        break;
-      default:
-        content = `❓ **Role management**: Unknown action ${action}`;
-    }
-
-    await interaction.reply({
-      content,
-      ephemeral: false
-    });
+    // Role management is handled by syncroles command
+    const syncRolesCommand = require('../commands/syncroles');
+    await syncRolesCommand.execute(interaction);
   }
 
   async handleCustom(interaction) {
@@ -154,31 +110,21 @@ class CommandManager {
   }
 
   async handleSendVerify(interaction) {
-    const user = interaction.options.getUser('user');
-
-    await interaction.reply({
-      content: `✅ **Verification sent to**: ${user.tag}`,
-      ephemeral: false
-    });
+    // Reuse the existing sendverify command handler
+    const sendVerifyCommand = require('../commands/sendverify');
+    await sendVerifyCommand.execute(interaction);
   }
 
   async handleSetVerifyLog(interaction) {
-    const channel = interaction.options.getChannel('channel');
-
-    await interaction.reply({
-      content: `📝 **Verification log channel set to**: ${channel}`,
-      ephemeral: false
-    });
+    // Reuse the existing setverifylog command handler
+    const setVerifyLogCommand = require('../commands/setverifylog');
+    await setVerifyLogCommand.execute(interaction);
   }
 
   async handleFeedback(interaction) {
-    const message = interaction.options.getString('message');
-    const category = interaction.options.getString('category') || 'General';
-
-    await interaction.reply({
-      content: `💬 **Feedback received**\nCategory: ${category}\nMessage: ${message}`,
-      ephemeral: false
-    });
+    // Reuse the existing feedback command handler
+    const feedbackCommand = require('../commands/feedback');
+    await feedbackCommand.execute(interaction);
   }
 
   async handleEmbed(interaction) {

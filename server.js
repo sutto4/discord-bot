@@ -1477,6 +1477,10 @@ module.exports = function startServer(client) {
   setInterval(processCommandUpdates, 5000);
 
   app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚨🚨🚨 API SERVER LISTENING ON PORT ${PORT} 🚨🚨🚨`);
     console.log(`API server listening on port ${PORT}`);
+  }).on('error', (err) => {
+    console.error(`🚨🚨🚨 API SERVER ERROR ON PORT ${PORT} 🚨🚨🚨`);
+    console.error('API server error:', err);
   });
 };

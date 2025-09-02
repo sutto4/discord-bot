@@ -214,16 +214,16 @@ module.exports = function startServer(client) {
       // Update each command state
       for (var i = 0; i < commands.length; i++) {
         var cmd = commands[i];
-        console.log(`[BOT-COMMANDS-API] Updating command ${cmd.name} to ${cmd.enabled ? 'enabled' : 'disabled'}`);
+        console.log(`[BOT-COMMANDS-API] Updating command ${cmd.command_name} to ${cmd.enabled ? 'enabled' : 'disabled'}`);
         
         var result = await appDb.query(
           `INSERT INTO guild_commands (guild_id, command_name, enabled)
            VALUES (?, ?, ?)
            ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_at = CURRENT_TIMESTAMP`,
-          [guildId, cmd.name, cmd.enabled ? 1 : 0]
+          [guildId, cmd.command_name, cmd.enabled ? 1 : 0]
         );
         
-        console.log(`[BOT-COMMANDS-API] Database result for ${cmd.name}:`, result);
+        console.log(`[BOT-COMMANDS-API] Database result for ${cmd.command_name}:`, result);
       }
 
       // Trigger command update

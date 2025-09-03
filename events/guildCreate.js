@@ -69,7 +69,7 @@ module.exports = {
 					const welcomeEmbed = {
 						color: 0x00ff00,
 						title: '🎉 Welcome to ServerMate!',
-						description: `Thank you for adding ServerMate to **${guild.name}**! I'm excited to help you manage your server more efficiently.`,
+						description: `**🚧 BETA RELEASE** - This is a beta version subject to testing and ongoing development.\n\nThank you for adding ServerMate to **${guild.name}**! I'm excited to help you manage your server more efficiently.`,
 						fields: [
 							{
 								name: '🚀 Getting Started',
@@ -107,7 +107,7 @@ module.exports = {
 					const ownerWelcomeEmbed = {
 						color: 0x00ff00,
 						title: '🎉 ServerMate Added to Your Server!',
-						description: `ServerMate has been added to **${guild.name}**! As the server owner, you have full access to all features.`,
+						description: `**🚧 BETA RELEASE** - This is a beta version subject to testing and ongoing development.\n\nServerMate has been added to **${guild.name}**! As the server owner, you have full access to all features.`,
 						fields: [
 							{
 								name: '🔧 Next Steps',

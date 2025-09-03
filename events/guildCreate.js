@@ -62,10 +62,76 @@ module.exports = {
 				joinedAt: new Date().toISOString()
 			});
 
-			// You can add additional logic here like:
-			// - Setting up default configurations
-			// - Sending welcome messages
-			// - Initializing guild-specific data
+			// Send welcome DM to bot inviter
+			if (botInviterId) {
+				try {
+					const inviter = await client.users.fetch(botInviterId);
+					const welcomeEmbed = {
+						color: 0x00ff00,
+						title: '🎉 Welcome to ServerMate!',
+						description: `Thank you for adding ServerMate to **${guild.name}**! I'm excited to help you manage your server more efficiently.`,
+						fields: [
+							{
+								name: '🚀 Getting Started',
+								value: '• Visit the [web dashboard](https://app.servermate.gg) to configure your server\n• Check out our [documentation](https://docs.servermate.gg) for detailed guides\n• Join our [support Discord](https://discord.gg/servermate) for help and updates',
+								inline: false
+							},
+							{
+								name: '⚙️ Quick Setup',
+								value: '• Configure moderation commands in your server settings\n• Set up verification system if needed\n• Customize bot permissions and roles',
+								inline: false
+							},
+							{
+								name: '💎 Premium Features',
+								value: 'Upgrade to premium for advanced features like:\n• Custom commands\n• Advanced analytics\n• Priority support\n• And much more!',
+								inline: false
+							}
+						],
+						footer: {
+							text: 'ServerMate - Making Discord server management easier'
+						},
+						timestamp: new Date().toISOString()
+					};
+
+					await inviter.send({ embeds: [welcomeEmbed] });
+					console.log(`[GUILD_CREATE] Sent welcome DM to bot inviter ${botInviterId}`);
+				} catch (dmError) {
+					console.log(`[GUILD_CREATE] Could not send welcome DM to bot inviter:`, dmError.message);
+				}
+			}
+
+			// Send welcome DM to server owner (if different from inviter)
+			if (guild.ownerId && guild.ownerId !== botInviterId) {
+				try {
+					const owner = await client.users.fetch(guild.ownerId);
+					const ownerWelcomeEmbed = {
+						color: 0x00ff00,
+						title: '🎉 ServerMate Added to Your Server!',
+						description: `ServerMate has been added to **${guild.name}**! As the server owner, you have full access to all features.`,
+						fields: [
+							{
+								name: '🔧 Next Steps',
+								value: '• Visit the [web dashboard](https://app.servermate.gg) to configure your server\n• Set up moderation commands and permissions\n• Configure verification system if needed',
+								inline: false
+							},
+							{
+								name: '📚 Resources',
+								value: '• [Documentation](https://docs.servermate.gg)\n• [Support Discord](https://discord.gg/servermate)\n• [Feature Guide](https://docs.servermate.gg/features)',
+								inline: false
+							}
+						],
+						footer: {
+							text: 'ServerMate - Making Discord server management easier'
+						},
+						timestamp: new Date().toISOString()
+					};
+
+					await owner.send({ embeds: [ownerWelcomeEmbed] });
+					console.log(`[GUILD_CREATE] Sent welcome DM to server owner ${guild.ownerId}`);
+				} catch (dmError) {
+					console.log(`[GUILD_CREATE] Could not send welcome DM to server owner:`, dmError.message);
+				}
+			}
 
 		} catch (error) {
 			console.error(`[GUILD_CREATE] Error handling guild join for ${guild.name}:`, error);

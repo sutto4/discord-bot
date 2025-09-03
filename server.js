@@ -33,6 +33,18 @@ module.exports = function startServer(client) {
   // Health
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
+  // Manual cleanup endpoint for testing
+  app.post("/api/cleanup-deleted-guilds", async (_req, res) => {
+    try {
+      console.log('🧹 Manual cleanup triggered via API...');
+      await cleanupDeletedGuilds();
+      res.json({ success: true, message: 'Cleanup completed' });
+    } catch (error) {
+      console.error('❌ Manual cleanup failed:', error);
+      res.status(500).json({ error: 'Cleanup failed', details: error.message });
+    }
+  });
+
   // Command server endpoints
   app.get("/api/commands/health", (_req, res) => {
     console.log(`🚨🚨🚨 HEALTH CHECK REQUESTED! 🚨🚨🚨`);
@@ -47,6 +59,17 @@ module.exports = function startServer(client) {
   app.get("/api/guilds/:guildId/commands", async (req, res) => {
     try {
       var guildId = req.params.guildId;
+      
+      // Check if bot is in this guild
+      if (!client.guilds.cache.has(guildId)) {
+        console.log(`[COMMANDS-API] Bot is not in guild ${guildId}, returning empty commands`);
+        return res.json({
+          success: true,
+          guildId,
+          commands: []
+        });
+      }
+      
       var guild = await client.guilds.fetch(guildId);
 
       // Get all available commands from the command registry
@@ -102,6 +125,16 @@ module.exports = function startServer(client) {
   app.get("/api/guilds/:guildId/command-permissions", async (req, res) => {
     try {
       var guildId = req.params.guildId;
+      
+      // Check if bot is in this guild
+      if (!client.guilds.cache.has(guildId)) {
+        console.log(`[PERMISSIONS-API] Bot is not in guild ${guildId}, returning empty permissions`);
+        return res.json({
+          commands: {},
+          features: {}
+        });
+      }
+      
       var guild = await client.guilds.fetch(guildId);
 
       // Get all available commands from the database
@@ -1293,13 +1326,75 @@ module.exports = function startServer(client) {
     }
   });
 
+  // Clean up deleted guilds from database
+  const cleanupDeletedGuilds = async () => {
+    try {
+      console.log('🧹 Starting deleted guild cleanup...');
+      const [rows] = await appDb.query("SELECT guild_id, guild_name FROM guilds WHERE status = 'active' OR status IS NULL");
+
+      console.log(`🔍 Checking ${rows.length} guilds for deletion...`);
+      let cleanedCount = 0;
+
+      for (const row of rows) {
+        try {
+          // Try to fetch the guild from Discord
+          await client.guilds.fetch(row.guild_id);
+          // If we get here, the guild still exists
+        } catch (err) {
+          if (err.code === 10004) { // Unknown Guild
+            console.log(`🗑️ Guild ${row.guild_name} (${row.guild_id}) no longer exists, cleaning up database...`);
+            
+            // Mark guild as deleted in database
+            await appDb.query(
+              "UPDATE guilds SET status = 'deleted', updated_at = NOW() WHERE guild_id = ?",
+              [row.guild_id]
+            );
+            
+            // Clean up related tables
+            await appDb.query("DELETE FROM guild_commands WHERE guild_id = ?", [row.guild_id]);
+            await appDb.query("DELETE FROM guild_features WHERE guild_id = ?", [row.guild_id]);
+            await appDb.query("DELETE FROM server_access_control WHERE guild_id = ?", [row.guild_id]);
+            
+            console.log(`✅ Cleaned up deleted guild: ${row.guild_name} (${row.guild_id})`);
+            cleanedCount++;
+          } else {
+            console.warn(`⚠️ Error checking guild ${row.guild_name}:`, err.message);
+          }
+        }
+      }
+
+      if (cleanedCount > 0) {
+        console.log(`✅ Cleanup completed: Removed ${cleanedCount} deleted guilds from database`);
+      } else {
+        console.log(`✅ Cleanup completed: No deleted guilds found`);
+      }
+    } catch (error) {
+      console.error('❌ Deleted guild cleanup failed:', error);
+    }
+  };
+
   // Periodic member count sync job (runs every 6 hours)
   const syncMemberCounts = async () => {
     try {
       console.log('🔄 Starting periodic member count sync...');
-      const [rows] = await appDb.query("SELECT guild_id, guild_name, member_count FROM guilds WHERE status = 'active' OR status IS NULL");
+      
+      // Only sync guilds that the bot is actually in
+      const botGuildIds = Array.from(client.guilds.cache.keys());
+      console.log(`🤖 Bot is in ${botGuildIds.length} guilds:`, botGuildIds);
+      
+      if (botGuildIds.length === 0) {
+        console.log('📊 No guilds to sync - bot is not in any servers');
+        return;
+      }
+      
+      // Get guilds from database that the bot is actually in
+      const placeholders = botGuildIds.map(() => '?').join(',');
+      const [rows] = await appDb.query(
+        `SELECT guild_id, guild_name, member_count FROM guilds WHERE guild_id IN (${placeholders}) AND (status = 'active' OR status IS NULL)`,
+        botGuildIds
+      );
 
-      console.log(`📊 Found ${rows.length} active guilds to sync`);
+      console.log(`📊 Found ${rows.length} guilds in database that bot is in`);
       let updatedCount = 0;
 
       for (const row of rows) {
@@ -1318,7 +1413,11 @@ module.exports = function startServer(client) {
             updatedCount++;
           }
         } catch (err) {
-          console.warn(`⚠️ Could not sync member count for ${row.guild_name}:`, err.message);
+          if (err.code === 10004) { // Unknown Guild
+            console.log(`🗑️ Guild ${row.guild_name} (${row.guild_id}) no longer exists during sync, will be cleaned up next cleanup cycle`);
+          } else {
+            console.warn(`⚠️ Could not sync member count for ${row.guild_name}:`, err.message);
+          }
         }
       }
 
@@ -1330,6 +1429,9 @@ module.exports = function startServer(client) {
 
   // Start periodic sync (every 6 hours = 6 * 60 * 60 * 1000 ms)
   setInterval(syncMemberCounts, 6 * 60 * 60 * 1000);
+  
+  // Start periodic cleanup (every 12 hours = 12 * 60 * 60 * 1000 ms)
+  setInterval(cleanupDeletedGuilds, 12 * 60 * 60 * 1000);
 
 
 
@@ -1449,6 +1551,9 @@ module.exports = function startServer(client) {
 
   // Run initial sync after 30 seconds (to let bot fully connect)
   setTimeout(syncMemberCounts, 30000);
+  
+  // Run initial cleanup after 45 seconds (to let bot fully connect)
+  setTimeout(cleanupDeletedGuilds, 45000);
 
   // File watcher for command updates (fallback)
   const fs = require('fs');

@@ -45,6 +45,18 @@ module.exports = function startServer(client) {
     }
   });
 
+  // Manual sync endpoint for testing
+  app.post("/api/sync-member-counts", async (_req, res) => {
+    try {
+      console.log('🔄 Manual member count sync triggered via API...');
+      await syncMemberCounts();
+      res.json({ success: true, message: 'Member count sync completed' });
+    } catch (error) {
+      console.error('❌ Manual sync failed:', error);
+      res.status(500).json({ error: 'Sync failed', details: error.message });
+    }
+  });
+
   // Command server endpoints
   app.get("/api/commands/health", (_req, res) => {
     console.log(`🚨🚨🚨 HEALTH CHECK REQUESTED! 🚨🚨🚨`);
@@ -1438,9 +1450,19 @@ module.exports = function startServer(client) {
         } catch (err) {
           if (err.code === 10004) { // Unknown Guild
             console.log(`🗑️ Guild ${row.guild_name} (${row.guild_id}) no longer exists during sync, will be cleaned up next cleanup cycle`);
+            try {
+              await appDb.query("UPDATE guilds SET status = 'removed', updated_at = NOW() WHERE guild_id = ?", [row.guild_id]);
+            } catch (dbError) {
+              console.warn(`⚠️ Could not mark ${row.guild_name} as removed during sync:`, dbError.message);
+            }
           } else if (err.code === 50013) {
             // Missing Permissions - server-specific issue
             console.log(`🔒 Guild ${row.guild_name} (${row.guild_id}) - missing permissions during sync`);
+            try {
+              await appDb.query("UPDATE guilds SET status = 'inactive', updated_at = NOW() WHERE guild_id = ?", [row.guild_id]);
+            } catch (dbError) {
+              console.warn(`⚠️ Could not mark ${row.guild_name} as inactive during sync:`, dbError.message);
+            }
           } else {
             // Global issues - don't change status, just log
             console.warn(`⚠️ Global issue affecting guild ${row.guild_name} during sync:`, err.message);

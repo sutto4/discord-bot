@@ -62,6 +62,20 @@ module.exports = {
 				joinedAt: new Date().toISOString()
 			});
 
+			// Mark server as newly added for sound notification
+			if (botInviterId) {
+				try {
+					// Store notification flag in database for web app sound
+					await appDb.query(
+						"INSERT INTO user_notifications (user_id, type, message, data, created_at) VALUES (?, 'new_server', ?, ?, NOW()) ON DUPLICATE KEY UPDATE created_at = NOW()",
+						[botInviterId, `ServerMate added to ${guild.name}!`, JSON.stringify({ guildId: guild.id, guildName: guild.name, timestamp: new Date().toISOString() })]
+					);
+					console.log(`[GUILD_CREATE] Stored new server notification for user ${botInviterId}`);
+				} catch (dbError) {
+					console.warn(`[GUILD_CREATE] Could not store notification:`, dbError.message);
+				}
+			}
+
 			// Send welcome DM to bot inviter
 			if (botInviterId) {
 				try {

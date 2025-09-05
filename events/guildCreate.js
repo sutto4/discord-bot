@@ -76,6 +76,57 @@ module.exports = {
 				}
 			}
 
+			// Send admin notification to the specified channel
+			try {
+				const notificationChannel = await client.channels.fetch('1413397479835308052');
+				if (notificationChannel && notificationChannel.type === 0) { // TEXT CHANNEL
+					// Find the servermate role
+					const servermateRole = notificationChannel.guild.roles.cache.find(
+						role => role.name.toLowerCase() === 'servermate'
+					);
+
+					const roleMention = servermateRole ? `<@&${servermateRole.id}>` : '@servermate';
+
+					const notificationEmbed = {
+						color: 0xffa500,
+						title: '🚨 New Server Added',
+						description: `ServerMate has been added to a new server!`,
+						fields: [
+							{
+								name: '📊 Server Details',
+								value: `**Name:** ${guild.name}\n**ID:** \`${guild.id}\`\n**Members:** ${guild.memberCount}\n**Owner:** <@${guild.ownerId}>`,
+								inline: true
+							},
+							{
+								name: '👤 Added By',
+								value: botInviterId ? `<@${botInviterId}>` : 'Unknown (audit logs unavailable)',
+								inline: true
+							},
+							{
+								name: '⏰ Timestamp',
+								value: `<t:${Math.floor(Date.now() / 1000)}:F>`,
+								inline: true
+							}
+						],
+						footer: {
+							text: 'ServerMate Admin Notification'
+						},
+						timestamp: new Date().toISOString()
+					};
+
+					await notificationChannel.send({
+						content: `${roleMention} New server added!`,
+						embeds: [notificationEmbed]
+					});
+
+					console.log(`[GUILD_CREATE] Sent admin notification for new server: ${guild.name}`);
+				} else {
+					console.warn(`[GUILD_CREATE] Could not find notification channel or it's not a text channel`);
+				}
+			} catch (notificationError) {
+				console.error(`[GUILD_CREATE] Error sending admin notification:`, notificationError.message);
+			}
+
 			// Send welcome DM to bot inviter
 			if (botInviterId) {
 				try {

@@ -36,7 +36,7 @@ module.exports = {
 			);
 
 			// Log to database
-			const { ModerationDatabase } = require('../utils/moderation-db');
+			const ModerationDatabase = require('../utils/moderation-db');
 			const modDb = new ModerationDatabase();
 
 			try {

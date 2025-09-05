@@ -34,22 +34,74 @@ module.exports = {
 				member,
 				reason
 			);
-			
-			// TODO: Database logging will be added later
-			console.log('Moderation action logged:', {
-				guildId: interaction.guildId,
-				caseId,
-				actionType: 'warn',
-				targetUserId: user.id,
-				targetUsername: user.tag,
-				moderatorUserId: interaction.user.id,
-				moderatorUsername: interaction.user.tag,
-				reason,
-				durationMs: null,
-				durationLabel: null,
-				active: false,
-				expiresAt: null
-			});
+
+			// Log to database
+			const { ModerationDatabase } = require('../utils/moderation-db');
+			const modDb = new ModerationDatabase();
+
+			try {
+				console.log('Attempting to log moderation action to database...');
+				console.log('Database config:', {
+					host: process.env.APP_DB_HOST || process.env.BOT_DB_HOST || '127.0.0.1',
+					user: process.env.APP_DB_USER || process.env.BOT_DB_USER || 'root',
+					database: process.env.APP_DB_NAME || process.env.BOT_DB_NAME || 'chester_bot',
+					port: process.env.APP_DB_PORT || process.env.BOT_DB_PORT || 3306,
+					hasPassword: !!(process.env.APP_DB_PASSWORD || process.env.BOT_DB_PASSWORD)
+				});
+
+				// Test database connection first
+				console.log('Testing database connection...');
+				const testConnection = await modDb.pool.getConnection();
+				console.log('Database connection successful');
+				testConnection.release();
+
+				console.log('Data being sent to database:', {
+					guildId: interaction.guildId,
+					guildIdLength: interaction.guildId.length,
+					caseId,
+					caseIdLength: caseId.length,
+					targetUserId: user.id,
+					targetUsername: user.tag,
+					moderatorUserId: interaction.user.id,
+					moderatorUsername: interaction.user.tag,
+					reason
+				});
+
+				const result = await modDb.logModerationAction({
+					guildId: interaction.guildId,
+					caseId,
+					actionType: 'warn',
+					targetUserId: user.id,
+					targetUsername: user.tag,
+					moderatorUserId: interaction.user.id,
+					moderatorUsername: interaction.user.tag,
+					reason,
+					durationMs: null,
+					durationLabel: null,
+					active: false,
+					expiresAt: null
+				});
+
+				console.log('Moderation action logged to database successfully:', {
+					guildId: interaction.guildId,
+					caseId,
+					actionType: 'warn',
+					targetUserId: user.id,
+					targetUsername: user.tag,
+					moderatorUserId: interaction.user.id,
+					moderatorUsername: interaction.user.tag,
+					reason,
+					databaseResult: result
+				});
+			} catch (dbError) {
+				console.error('Failed to log moderation action to database:', {
+					error: dbError.message,
+					stack: dbError.stack,
+					code: dbError.code,
+					sqlState: dbError.sqlState
+				});
+				// Don't fail the command if database logging fails
+			}
 
 			// Try to DM the warned user
 			try {

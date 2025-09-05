@@ -1,11 +1,12 @@
 const mysql = require('mysql2/promise');
 
-// Database configuration - you'll need to set these environment variables
+// Use the same database configuration as the rest of the bot
 const dbConfig = {
-	host: process.env.BOT_DB_HOST,
-	user: process.env.BOT_DB_USER,
-	password: process.env.BOT_DB_PASSWORD,
-	database: process.env.BOT_DB_NAME,
+	host: process.env.APP_DB_HOST || process.env.BOT_DB_HOST || '127.0.0.1',
+	user: process.env.APP_DB_USER || process.env.BOT_DB_USER || 'root',
+	password: process.env.APP_DB_PASSWORD || process.env.BOT_DB_PASSWORD || '',
+	database: process.env.APP_DB_NAME || process.env.BOT_DB_NAME || 'chester_bot',
+	port: Number(process.env.APP_DB_PORT || process.env.BOT_DB_PORT || 3306),
 	waitForConnections: true,
 	connectionLimit: 10,
 	queueLimit: 0
@@ -35,37 +36,59 @@ class ModerationDatabase {
 			} = data;
 
 			// Insert into moderation_cases table
-			const [result] = await connection.execute(`
-				INSERT INTO moderation_cases (
-					guild_id, case_id, action_type, target_user_id, target_username,
-					moderator_user_id, moderator_username, reason, duration_ms,
-					duration_label, active, expires_at, created_at, updated_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-			`, [
-				guildId, caseId, actionType, targetUserId, targetUsername,
-				moderatorUserId, moderatorUsername, reason, durationMs,
-				durationLabel, active ? 1 : 0, expiresAt
-			]);
+			console.log('Executing SQL query for moderation case...');
+			try {
+				const [result] = await connection.execute(`
+					INSERT INTO moderation_cases (
+						guild_id, case_id, action_type, target_user_id, target_username,
+						moderator_user_id, moderator_username, reason, duration_ms,
+						duration_label, active, expires_at, created_at, updated_at
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+				`, [
+					guildId, caseId, actionType, targetUserId, targetUsername,
+					moderatorUserId, moderatorUsername, reason, durationMs,
+					durationLabel, active ? 1 : 0, expiresAt
+				]);
 
-			const caseId_db = result.insertId;
+				const caseId_db = result.insertId;
+				console.log('Moderation case inserted successfully, ID:', caseId_db);
+			} catch (sqlError) {
+				console.error('SQL Error inserting moderation case:', {
+					message: sqlError.message,
+					code: sqlError.code,
+					sqlState: sqlError.sqlState,
+					sql: sqlError.sql
+				});
+				throw sqlError;
+			}
 
 			// Log the action in moderation_logs table
-			await connection.execute(`
-				INSERT INTO moderation_logs (
-					guild_id, case_id, action, user_id, username, details, created_at
-				) VALUES (?, ?, ?, ?, ?, ?, NOW())
-			`, [
-				guildId, caseId_db, actionType, moderatorUserId, moderatorUsername,
-				JSON.stringify({
-					targetUserId,
-					targetUsername,
-					reason,
-					durationMs,
-					durationLabel,
-					active,
-					expiresAt
-				})
-			]);
+			try {
+				await connection.execute(`
+					INSERT INTO moderation_logs (
+						guild_id, case_id, action, user_id, username, details, created_at
+					) VALUES (?, ?, ?, ?, ?, ?, NOW())
+				`, [
+					guildId, caseId_db, actionType, moderatorUserId, moderatorUsername,
+					JSON.stringify({
+						targetUserId,
+						targetUsername,
+						reason,
+						durationMs,
+						durationLabel,
+						active,
+						expiresAt
+					})
+				]);
+				console.log('Moderation log inserted successfully');
+			} catch (logError) {
+				console.error('SQL Error inserting moderation log:', {
+					message: logError.message,
+					code: logError.code,
+					sqlState: logError.sqlState
+				});
+				// Don't throw here - the main case was inserted successfully
+			}
 
 			return caseId_db;
 		} finally {

@@ -37,6 +37,7 @@ class ModerationDatabase {
 
 			// Insert into moderation_cases table
 			console.log('Executing SQL query for moderation case...');
+			let caseId_db;
 			try {
 				const [result] = await connection.execute(`
 					INSERT INTO moderation_cases (
@@ -50,7 +51,7 @@ class ModerationDatabase {
 					durationLabel, active ? 1 : 0, expiresAt
 				]);
 
-				const caseId_db = result.insertId;
+				caseId_db = result.insertId;
 				console.log('Moderation case inserted successfully, ID:', caseId_db);
 			} catch (sqlError) {
 				console.error('SQL Error inserting moderation case:', {
@@ -62,14 +63,15 @@ class ModerationDatabase {
 				throw sqlError;
 			}
 
-			// Log the action in moderation_logs table
-			try {
-				await connection.execute(`
-					INSERT INTO moderation_logs (
-						guild_id, case_id, action, user_id, username, details, created_at
-					) VALUES (?, ?, ?, ?, ?, ?, NOW())
-				`, [
-					guildId, caseId_db, actionType, moderatorUserId, moderatorUsername,
+			// Log the action in moderation_logs table (only if case was inserted successfully)
+			if (caseId_db) {
+				try {
+					await connection.execute(`
+						INSERT INTO moderation_logs (
+							guild_id, case_id, action, user_id, username, details, created_at
+						) VALUES (?, ?, ?, ?, ?, ?, NOW())
+					`, [
+						guildId, caseId_db, actionType, moderatorUserId, moderatorUsername,
 					JSON.stringify({
 						targetUserId,
 						targetUsername,
@@ -88,6 +90,9 @@ class ModerationDatabase {
 					sqlState: logError.sqlState
 				});
 				// Don't throw here - the main case was inserted successfully
+			}
+			} else {
+				console.log('Skipping moderation log insert - case insertion failed');
 			}
 
 			return caseId_db;

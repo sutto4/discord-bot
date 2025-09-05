@@ -138,7 +138,7 @@ module.exports = {
 						fields: [
 							{
 								name: '🚀 Getting Started',
-								value: '• Visit the [web dashboard](https://app.servermate.gg) to configure your server\n• Check out our [documentation](https://docs.servermate.gg) for detailed guides\n• Join our [support Discord](https://discord.gg/servermate) for help and updates',
+								value: '• Visit the [web dashboard](https://servermate.gg) to configure your server\n• Join our [support Discord](https://discord.gg/pmvYxEGe4j) for help and updates',
 								inline: false
 							},
 							{
@@ -176,12 +176,12 @@ module.exports = {
 						fields: [
 							{
 								name: '🔧 Next Steps',
-								value: '• Visit the [web dashboard](https://app.servermate.gg) to configure your server\n• Set up moderation commands and permissions\n• Configure verification system if needed',
+								value: '• Visit the [web dashboard](https://servermate.gg) to configure your server\n• Set up moderation commands and permissions\n• Configure verification system if needed',
 								inline: false
 							},
 							{
 								name: '📚 Resources',
-								value: '• [Documentation](https://docs.servermate.gg)\n• [Support Discord](https://discord.gg/servermate)\n• [Feature Guide](https://docs.servermate.gg/features)',
+								value: '• [Support Discord](https://discord.gg/pmvYxEGe4j)',
 								inline: false
 							}
 						],

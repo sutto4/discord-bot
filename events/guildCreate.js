@@ -1,13 +1,51 @@
 const { GuildDatabase } = require('../config/database-multi-guild');
+const { appDb } = require('../config/database');
 
 module.exports = {
 	name: 'guildCreate',
 	async execute(guild, client) {
 		console.log(`[GUILD_CREATE] Bot joined new guild: ${guild.name} (${guild.id})`);
-		
+
 		try {
-			// Immediately add the guild to the database
+			// Check if guild already exists
+			const existingGuild = await GuildDatabase.getGuildConfig(guild.id);
+			if (existingGuild) {
+				console.log(`[GUILD_CREATE] Guild ${guild.name} (${guild.id}) already exists in database - handling as rejoin`);
+			} else {
+				console.log(`[GUILD_CREATE] New guild ${guild.name} (${guild.id}) - initializing in database`);
+			}
+
+			// Initialize or update the guild in the database (safe for existing guilds)
 			await GuildDatabase.initializeGuild(guild.id, guild.name);
+
+			// Set up default features and commands for new servers
+			if (!existingGuild) {
+				console.log(`[GUILD_CREATE] Setting up default features for new server: ${guild.name}`);
+
+				// Set default package (free features)
+				const packageSet = await GuildDatabase.setGuildPackage(guild.id, 'free');
+				if (packageSet) {
+					console.log(`[GUILD_CREATE] Default free package set up for ${guild.name}`);
+
+					// Get the enabled features for this guild
+					const enabledFeatures = await GuildDatabase.getGuildFeatures(guild.id);
+					const enabledFeatureNames = Object.keys(enabledFeatures).filter(key => enabledFeatures[key]);
+
+					console.log(`[GUILD_CREATE] Enabled features for ${guild.name}:`, enabledFeatureNames);
+
+					// Register commands for enabled features
+					if (client.commandManager && enabledFeatureNames.length > 0) {
+						try {
+							const result = await client.commandManager.updateGuildCommands(guild.id, enabledFeatureNames);
+							console.log(`[GUILD_CREATE] Registered ${result.commandsCount} commands for ${guild.name}`);
+						} catch (cmdError) {
+							console.error(`[GUILD_CREATE] Error registering commands for ${guild.name}:`, cmdError);
+						}
+					}
+				} else {
+					console.error(`[GUILD_CREATE] Failed to set up default package for ${guild.name}`);
+				}
+			}
 
 			// Try to get the bot inviter from audit logs
 			let botInviterId = null;
@@ -29,7 +67,6 @@ module.exports = {
 			// Grant access to bot inviter if found
 			if (botInviterId) {
 				try {
-					const { appDb } = require('../config/database');
 					await appDb.query(
 						'INSERT INTO server_access_control (guild_id, user_id, has_access, granted_by, notes) VALUES (?, ?, 1, ?, ?) ON DUPLICATE KEY UPDATE has_access = 1, granted_at = CURRENT_TIMESTAMP',
 						[guild.id, botInviterId, 'SYSTEM', 'Bot inviter - automatic access']
@@ -42,7 +79,6 @@ module.exports = {
 
 			// Also grant access to server owner
 			try {
-				const { appDb } = require('../config/database');
 				await appDb.query(
 					'INSERT INTO server_access_control (guild_id, user_id, has_access, granted_by, notes) VALUES (?, ?, 1, ?, ?) ON DUPLICATE KEY UPDATE has_access = 1, granted_at = CURRENT_TIMESTAMP',
 					[guild.id, guild.ownerId, 'SYSTEM', 'Server owner - automatic access']

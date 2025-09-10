@@ -220,16 +220,16 @@ async function saveEmbeddedMessageConfig(guildId, config) {
       // Create new
       const [result] = await appDb.query(
         `INSERT INTO embedded_messages (
-          guild_id, channel_id, message_id, title, description, color, 
-          image_url, thumbnail_url, author_name, author_icon_url, 
-          footer_text, footer_icon_url, timestamp, enabled, multi_channel, 
+          guild_id, channel_id, message_id, title, description, color,
+          image_url, thumbnail_url, author_name, author_icon_url,
+          footer_text, footer_icon_url, timestamp, enabled, multi_channel,
           enable_buttons, buttons, created_by, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
         [
           guildId, config.channelId, config.messageId, config.title, config.description, config.color,
           config.imageUrl, config.thumbnailUrl, authorName, authorIconUrl,
           footerText, footerIconUrl, config.timestamp, config.enabled !== false ? 1 : 0,
-          isMultiChannel ? 1 : 0, config.enableButtons ? 1 : 0, 
+          isMultiChannel ? 1 : 0, config.enableButtons ? 1 : 0,
           config.buttons ? JSON.stringify(config.buttons) : null, config.createdBy || 'ServerMate Bot'
         ]
       );

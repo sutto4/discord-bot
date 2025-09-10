@@ -2,6 +2,53 @@ const { Events, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, Ac
 const { logToChannel } = require('../helpers/logger');
 const { logFeedbackToChannel } = require('../helpers/feedbackLogger');
 const { GuildDatabase } = require('../config/database-multi-guild');
+const fetch = require('node-fetch');
+
+// Command activity reporting to CCC web app
+async function reportCommandActivity(interaction, commandName, startTime, success, errorMessage = null) {
+	try {
+		const webAppUrl = process.env.CCC_WEB_APP_URL || 'http://localhost:3000';
+		const responseTime = Date.now() - startTime;
+
+		// Increment global command counter
+		if (!global.commandCount) global.commandCount = 0;
+		global.commandCount++;
+
+		const activityData = {
+			command: commandName,
+			userId: interaction.user.id,
+			guildId: interaction.guild?.id,
+			channelId: interaction.channel?.id,
+			timestamp: Date.now(),
+			responseTime: responseTime,
+			success: success,
+			errorMessage: errorMessage,
+			args: interaction.options?.data?.map(opt => ({
+				name: opt.name,
+				value: opt.value,
+				type: opt.type
+			})) || []
+		};
+
+		const response = await fetch(`${webAppUrl}/api/bot-activity`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'User-Agent': 'ServerMate-DiscordBot/1.0'
+			},
+			body: JSON.stringify(activityData),
+			timeout: 3000
+		});
+
+		if (response.ok) {
+			console.log(`📊 [BOT-ACTIVITY] Command "${commandName}" reported to CCC (${responseTime}ms)`);
+		} else {
+			console.warn(`📊 [BOT-ACTIVITY] Failed to report command to CCC: ${response.status}`);
+		}
+	} catch (error) {
+		console.warn('📊 [BOT-ACTIVITY] Error reporting command to CCC:', error.message);
+	}
+}
 
 module.exports = {
 	name: Events.InteractionCreate,
@@ -551,9 +598,15 @@ module.exports = {
 
 		// Slash command handler
 		if (interaction.isChatInputCommand()) {
+			const commandName = interaction.commandName;
+			const startTime = Date.now();
+
 			// First try the CommandManager for dynamic commands
 			if (interaction.client.commandManager) {
 				await interaction.client.commandManager.handleInteraction(interaction);
+
+				// Report command activity to CCC web app
+				await reportCommandActivity(interaction, commandName, startTime, true);
 				return;
 			}
 
@@ -563,8 +616,15 @@ module.exports = {
 
 			try {
 				await command.execute(interaction);
+
+				// Report command activity to CCC web app
+				await reportCommandActivity(interaction, commandName, startTime, true);
 			} catch (error) {
 				console.error(error);
+
+				// Report failed command activity to CCC web app
+				await reportCommandActivity(interaction, commandName, startTime, false, error.message);
+
 				await interaction.reply({ content: '❌ Command failed.', flags: 64 });
 			}
 		}

@@ -136,7 +136,7 @@ async function logModerationAction(guild, action, moderatorUser, targetMember, r
 
 			embed.addFields({
 				name: 'Case Details',
-				value: `[📱 View in Web App](${caseUrl})\n\`Case ID: ${caseId}\`\n> Use \`/case case_id:${caseId}\` to view in Discord`,
+				value: `[📱 View Case Details](${caseUrl})`,
 				inline: false
 			});
 		} else {

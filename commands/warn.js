@@ -32,7 +32,9 @@ module.exports = {
 				'warn',
 				interaction.user,
 				member,
-				reason
+				reason,
+				null, // no duration for warns
+				caseId
 			);
 
 			// Log to database

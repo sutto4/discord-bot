@@ -21,7 +21,7 @@ function sanitize(text, fallback = 'N/A') {
 	return v.length ? (v.length > 900 ? v.slice(0, 897) + '...' : v) : fallback;
 }
 
-async function logModerationAction(guild, action, moderatorUser, targetMember, reason, durationLabel) {
+async function logModerationAction(guild, action, moderatorUser, targetMember, reason, durationLabel, caseId = null) {
 	try {
 		// First try to get moderation-specific log channel from database
 		let logChannelId = null;
@@ -122,13 +122,25 @@ async function logModerationAction(guild, action, moderatorUser, targetMember, r
 			embed.addFields({ name: 'Duration', value: sanitize(durationLabel), inline: true });
 		}
 
-		// Add case ID if we have one
+		// Add case ID with web app link if we have one
 		if (caseId) {
+			const webAppUrl = process.env.CCC_WEB_APP_URL || 'https://servermate.gg';
+			const caseUrl = `${webAppUrl}/guilds/${guild.id}/moderation?case=${caseId}`;
+
+			console.log('[MODERATION] Generated case link:', {
+				caseId,
+				webAppUrl,
+				caseUrl,
+				guildId: guild.id
+			});
+
 			embed.addFields({
-				name: 'Case ID',
-				value: `\`${caseId}\`\n> Use \`/case case_id:${caseId}\` to view details`,
+				name: 'Case Details',
+				value: `[📱 View in Web App](${caseUrl})\n\`Case ID: ${caseId}\`\n> Use \`/case case_id:${caseId}\` to view in Discord`,
 				inline: false
 			});
+		} else {
+			console.log('[MODERATION] No caseId generated for moderation action');
 		}
 
 		await logChannel.send({ embeds: [embed] }).catch(() => null);

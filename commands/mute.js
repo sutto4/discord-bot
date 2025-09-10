@@ -64,7 +64,8 @@ module.exports = {
 				interaction.user,
 				member,
 				reason,
-				parsed.label
+				parsed.label,
+				caseId
 			);
 			
 			// Log to database

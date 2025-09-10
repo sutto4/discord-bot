@@ -60,7 +60,9 @@ module.exports = {
 				'unban',
 				interaction.user,
 				null, // No member object for unbans
-				reason
+				reason,
+				null, // no duration for unbans
+				caseId
 			);
 			
 			// Log to database

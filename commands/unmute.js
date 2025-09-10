@@ -49,7 +49,9 @@ module.exports = {
 				'unmute',
 				interaction.user,
 				member,
-				reason
+				reason,
+				null, // no duration for unmutes
+				caseId
 			);
 			
 			// Log to database

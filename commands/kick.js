@@ -41,7 +41,9 @@ module.exports = {
 				'kick',
 				interaction.user,
 				member,
-				reason
+				reason,
+				null, // no duration for kicks
+				caseId
 			);
 			
 			// Log to database

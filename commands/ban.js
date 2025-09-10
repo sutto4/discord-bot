@@ -68,7 +68,8 @@ module.exports = {
 				interaction.user,
 				member,
 				reason,
-				durationLabel
+				durationLabel,
+				caseId
 			);
 			
 			// TODO: Database logging will be added later

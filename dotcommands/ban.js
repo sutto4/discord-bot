@@ -32,7 +32,11 @@ module.exports = {
 			// Discord API now prefers deleteMessageSeconds (convert days -> seconds)
 			const deleteMessageSeconds = deleteDays * 24 * 60 * 60;
 			await member.ban({ reason, deleteMessageSeconds });
-			await logModerationAction(message.guild, 'ban', message.author, member, reason);
+
+			// Generate case ID
+			const caseId = await generateCaseId(message.guild.id);
+			await logModerationAction(message.guild, 'ban', message.author, member, reason, null, caseId);
+
 			// DM embed to the user (best effort)
 			try {
 				const dmEmbed = buildUserDmEmbed('ban', message.guild.name, message.author.tag, reason, targetUser);
@@ -44,3 +48,11 @@ module.exports = {
 		}
 	}
 };
+
+// Helper function to generate case ID
+async function generateCaseId(guildId) {
+	// Simple case ID generation - you can enhance this
+	const timestamp = Date.now();
+	const random = Math.floor(Math.random() * 1000);
+	return `${guildId}-${timestamp}-${random}`;
+}

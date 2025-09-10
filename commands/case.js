@@ -73,8 +73,32 @@ function getActionColor(actionType) {
 }
 
 async function getCaseDetails(guildId, caseId) {
-	// TODO: Implement database query
-	// For now, return mock data
-	console.log(`Fetching case ${caseId} for guild ${guildId}`);
-	return null;
+	try {
+		const ModerationDatabase = require('../utils/moderation-db');
+		const modDb = new ModerationDatabase();
+
+		const caseData = await modDb.getCaseDetails(guildId, caseId);
+
+		if (!caseData) {
+			return null;
+		}
+
+		// Convert database format to display format
+		return {
+			case_id: caseData.case_id,
+			action_type: caseData.action_type,
+			target_username: caseData.target_username,
+			target_user_id: caseData.target_user_id,
+			moderator_username: caseData.moderator_username,
+			moderator_user_id: caseData.moderator_user_id,
+			reason: caseData.reason,
+			duration_label: caseData.duration_label,
+			active: caseData.active === 1,
+			expires_at: caseData.expires_at,
+			created_at: caseData.created_at
+		};
+	} catch (error) {
+		console.error('Error fetching case details:', error);
+		return null;
+	}
 }

@@ -25,7 +25,7 @@ async function logModerationAction(guild, action, moderatorUser, targetMember, r
 	try {
 		// First try to get moderation-specific log channel from database
 		let logChannelId = null;
-		
+
 		// Check for moderation log channel first
 		try {
 			const mysql = require('mysql2/promise');
@@ -38,32 +38,68 @@ async function logModerationAction(guild, action, moderatorUser, targetMember, r
 				connectionLimit: 10,
 				queueLimit: 0
 			};
-			
+
 			const connection = await mysql.createConnection(dbConfig);
 			const [rows] = await connection.execute(
 				'SELECT mod_channel_id FROM guilds WHERE guild_id = ?',
 				[guild.id]
 			);
 			connection.end();
-			
+
 			if (rows.length > 0 && rows[0].mod_channel_id) {
 				logChannelId = rows[0].mod_channel_id;
 			}
 		} catch (err) {
 			console.error('Failed to get mod log channel from database:', err);
 		}
-		
+
 		// Fall back to general verify log channel if no moderation log channel is set
 		if (!logChannelId) {
 			const { getLogChannelId } = require('./guildConfig');
 			logChannelId = await getLogChannelId(guild.id);
 		}
-		
+
 		if (!logChannelId) return;
-		
+
 		const logChannel = guild.channels.cache.get(logChannelId) ||
 			await guild.channels.fetch(logChannelId).catch(() => null);
 		if (!logChannel) return;
+
+		// Log to database and get case details
+		let caseId = null;
+		let caseDbId = null;
+
+		try {
+			const ModerationDatabase = require('./moderation-db');
+			const modDb = new ModerationDatabase();
+
+			// Prepare data for database logging
+			const logData = {
+				guildId: guild.id,
+				actionType: action,
+				targetUserId: targetMember?.id || 'Unknown',
+				targetUsername: targetMember?.user?.tag || targetMember?.tag || 'Unknown',
+				moderatorUserId: moderatorUser?.id || 'Unknown',
+				moderatorUsername: moderatorUser?.tag || 'Unknown',
+				reason: reason || 'No reason provided',
+				durationMs: parseDuration(durationLabel) || null,
+				durationLabel: durationLabel || null,
+				active: action === 'mute' || action === 'ban', // Active for temporary actions
+				expiresAt: null
+			};
+
+			// Calculate expiration for temporary actions
+			if (logData.durationMs && (action === 'mute' || action === 'ban')) {
+				logData.expiresAt = new Date(Date.now() + logData.durationMs);
+			}
+
+			const result = await modDb.logModerationAction(logData);
+			caseId = result?.caseId;
+			caseDbId = result?.caseId_db;
+
+		} catch (dbError) {
+			console.error('Failed to log moderation action to database:', dbError);
+		}
 
 		const targetValue = targetMember
 			? `<@${targetMember.id}> (${sanitize(targetMember.user.tag)})`
@@ -85,11 +121,22 @@ async function logModerationAction(guild, action, moderatorUser, targetMember, r
 		if (durationLabel) {
 			embed.addFields({ name: 'Duration', value: sanitize(durationLabel), inline: true });
 		}
+
+		// Add case ID if we have one
+		if (caseId) {
+			embed.addFields({
+				name: 'Case ID',
+				value: `\`${caseId}\`\n> Use \`/case case_id:${caseId}\` to view details`,
+				inline: false
+			});
+		}
+
 		await logChannel.send({ embeds: [embed] }).catch(() => null);
 	} catch (err) {
 		console.error('Failed to log moderation action:', err);
 	}
 }
+
 
 function getActionColor(action) {
 	switch (action) {

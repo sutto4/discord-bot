@@ -17,10 +17,17 @@ class ModerationDatabase {
 		this.pool = mysql.createPool(dbConfig);
 	}
 
+	// Generate a unique case ID
+	generateCaseId(guildId) {
+		const timestamp = Date.now();
+		const random = Math.random().toString(36).substring(2, 8);
+		return `${guildId}-${timestamp}-${random}`;
+	}
+
 	async logModerationAction(data) {
 		const connection = await this.pool.getConnection();
 		try {
-			const {
+			let {
 				guildId,
 				caseId,
 				actionType,
@@ -34,6 +41,11 @@ class ModerationDatabase {
 				active,
 				expiresAt
 			} = data;
+
+			// Generate case ID if not provided
+			if (!caseId) {
+				caseId = this.generateCaseId(guildId);
+			}
 
 			// Insert into moderation_cases table
 			console.log('Executing SQL query for moderation case...');
@@ -95,7 +107,10 @@ class ModerationDatabase {
 				console.log('Skipping moderation log insert - case insertion failed');
 			}
 
-			return caseId_db;
+			return {
+				caseId_db,
+				caseId
+			};
 		} finally {
 			connection.release();
 		}

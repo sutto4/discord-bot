@@ -1374,11 +1374,19 @@ module.exports = function startServer(client) {
       
       // Mark guilds as 'removed' if bot is no longer in them
       for (const guild of leftGuilds) {
-        if (guild.status !== 'removed' && guild.status !== 'deleted' && guild.status !== 'cleaned') {
+        if (guild.status !== 'removed' && guild.status !== 'deleted') {
           console.log(`🗑️ Marking guild as removed: ${guild.guild_name} (${guild.guild_id}) - bot no longer in this server`);
           await appDb.query("UPDATE guilds SET status = 'removed', updated_at = NOW() WHERE guild_id = ?", [guild.guild_id]);
           markedAsRemoved++;
         }
+      }
+      
+      // Also convert any existing 'cleaned' status to 'left' for consistency
+      const [cleanedRows] = await appDb.query("SELECT guild_id, guild_name FROM guilds WHERE status = 'cleaned'");
+      if (cleanedRows.length > 0) {
+        console.log(`🔄 Converting ${cleanedRows.length} 'cleaned' status guilds to 'left' status`);
+        await appDb.query("UPDATE guilds SET status = 'left', updated_at = NOW() WHERE status = 'cleaned'");
+        markedAsRemoved += cleanedRows.length;
       }
       
       // Now clean up guilds marked as 'removed' (bot was kicked/removed)
@@ -1399,8 +1407,8 @@ module.exports = function startServer(client) {
         await appDb.query("DELETE FROM guild_features WHERE guild_id = ?", [row.guild_id]);
         await appDb.query("DELETE FROM server_access_control WHERE guild_id = ?", [row.guild_id]);
         
-        // Mark as cleaned up
-        await appDb.query("UPDATE guilds SET status = 'cleaned', updated_at = NOW() WHERE guild_id = ?", [row.guild_id]);
+        // Keep as removed status (no need for 'cleaned' status)
+        // Status remains 'removed' to indicate bot left the server
         
         console.log(`✅ Cleaned up removed guild: ${row.guild_name} (${row.guild_id})`);
         cleanedCount++;

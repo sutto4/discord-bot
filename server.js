@@ -1359,7 +1359,29 @@ module.exports = function startServer(client) {
     try {
       console.log('🧹 Starting removed guild cleanup...');
       
-      // Get guilds marked as 'removed' (bot was kicked/removed)
+      // Get all guilds from database
+      const [allGuilds] = await appDb.query("SELECT guild_id, guild_name, status FROM guilds");
+      
+      // Get guilds the bot is currently in
+      const botGuildIds = Array.from(client.guilds.cache.keys());
+      console.log(`🤖 Bot is currently in ${botGuildIds.length} guilds`);
+      
+      // Find guilds in database that bot is no longer in
+      const leftGuilds = allGuilds.filter(guild => !botGuildIds.includes(guild.guild_id));
+      console.log(`🔍 Found ${leftGuilds.length} guilds that bot has left`);
+      
+      let markedAsRemoved = 0;
+      
+      // Mark guilds as 'removed' if bot is no longer in them
+      for (const guild of leftGuilds) {
+        if (guild.status !== 'removed' && guild.status !== 'deleted' && guild.status !== 'cleaned') {
+          console.log(`🗑️ Marking guild as removed: ${guild.guild_name} (${guild.guild_id}) - bot no longer in this server`);
+          await appDb.query("UPDATE guilds SET status = 'removed', updated_at = NOW() WHERE guild_id = ?", [guild.guild_id]);
+          markedAsRemoved++;
+        }
+      }
+      
+      // Now clean up guilds marked as 'removed' (bot was kicked/removed)
       const [removedRows] = await appDb.query("SELECT guild_id, guild_name FROM guilds WHERE status = 'removed'");
       
       // Get guilds marked as 'deleted' (server was deleted from Discord)
@@ -1398,10 +1420,10 @@ module.exports = function startServer(client) {
         cleanedCount++;
       }
 
-      if (cleanedCount > 0) {
-        console.log(`✅ Cleanup completed: Cleaned up ${cleanedCount} guilds`);
+      if (markedAsRemoved > 0 || cleanedCount > 0) {
+        console.log(`✅ Cleanup completed: Marked ${markedAsRemoved} guilds as removed, cleaned up ${cleanedCount} guilds`);
       } else {
-        console.log(`✅ Cleanup completed: No guilds to clean up`);
+        console.log(`✅ Cleanup completed: No guilds to mark as removed or clean up`);
       }
     } catch (error) {
       console.error('❌ Guild cleanup failed:', error);

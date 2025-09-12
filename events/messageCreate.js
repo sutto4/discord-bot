@@ -278,7 +278,7 @@ async function handleStickyMessage(message, client) {
 
     // Post new sticky message
     const newStickyMessage = await message.channel.send({
-      content: `📌 **Sticky Message**\n${stickyData.content}`,
+      content: stickyData.content,
       allowedMentions: { parse: [] } // Disable mentions to prevent spam
     });
 

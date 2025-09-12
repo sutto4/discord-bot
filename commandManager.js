@@ -52,6 +52,12 @@ class CommandManager {
         case 'embed':
           await this.handleEmbed(interaction);
           break;
+        case 'sticky':
+          await this.handleSticky(interaction);
+          break;
+        case 'unsticky':
+          await this.handleUnsticky(interaction);
+          break;
         default:
           await interaction.reply({ 
             content: 'Unknown command', 
@@ -177,6 +183,18 @@ class CommandManager {
   // Method to get current commands for a guild
   getGuildCommands(guildId) {
     return this.commandRegistry.getRegisteredCommands(guildId);
+  }
+
+  async handleSticky(interaction) {
+    // Reuse the existing sticky command handler
+    const stickyCommand = require('./commands/sticky');
+    await stickyCommand.execute(interaction);
+  }
+
+  async handleUnsticky(interaction) {
+    // Reuse the existing unsticky command handler
+    const unstickyCommand = require('./commands/unsticky');
+    await unstickyCommand.execute(interaction);
   }
 }
 

@@ -12,24 +12,24 @@ module.exports = {
 		const channelId = interaction.channel.id;
 
 		try {
-			// Check if sticky messages feature is enabled
-			const features = await GuildDatabase.getGuildFeatures(guildId);
-			if (!features.sticky_messages) {
-				return await interaction.reply({
-					content: '❌ Sticky messages feature is not enabled for this server.',
-					ephemeral: true
-				});
-			}
+		// Check if sticky messages feature is enabled
+		const features = await GuildDatabase.getGuildFeatures(guildId);
+		if (!features.sticky_messages) {
+			return await interaction.reply({
+				content: '❌ Sticky messages feature is not enabled for this server.',
+				flags: 64 // Ephemeral flag
+			});
+		}
 
 			// Check if there's a sticky message in this channel
 			const stickyMessage = await GuildDatabase.getStickyMessage(guildId, channelId);
 			
-			if (!stickyMessage) {
-				return await interaction.reply({
-					content: '❌ No sticky message found in this channel.',
-					ephemeral: true
-				});
-			}
+		if (!stickyMessage) {
+			return await interaction.reply({
+				content: '❌ No sticky message found in this channel.',
+				flags: 64 // Ephemeral flag
+			});
+		}
 
 			// Delete the sticky message from Discord
 			try {
@@ -47,16 +47,16 @@ module.exports = {
 				global.stickyMessages.delete(`${guildId}-${channelId}`);
 			}
 
-			await interaction.reply({
-				content: '✅ Sticky message removed successfully!',
-				ephemeral: true
-			});
+		await interaction.reply({
+			content: '✅ Sticky message removed successfully!',
+			flags: 64 // Ephemeral flag
+		});
 
 		} catch (error) {
 			console.error('Error removing sticky message:', error);
 			await interaction.reply({
 				content: '❌ Failed to remove sticky message. Please try again.',
-				ephemeral: true
+				flags: 64 // Ephemeral flag
 			});
 		}
 	},

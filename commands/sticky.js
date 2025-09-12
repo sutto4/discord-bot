@@ -19,14 +19,20 @@ module.exports = {
 		const message = interaction.options.getString('message');
 
 		try {
-			// Check if sticky messages feature is enabled
-			const features = await GuildDatabase.getGuildFeatures(guildId);
-			if (!features.sticky_messages) {
-				return await interaction.reply({
-					content: '❌ Sticky messages feature is not enabled for this server.',
-					ephemeral: true
-				});
-			}
+		console.log(`[STICKY] Command executed by ${interaction.user.tag} in guild ${guildId}`);
+		
+		// Check if sticky messages feature is enabled
+		const features = await GuildDatabase.getGuildFeatures(guildId);
+		console.log(`[STICKY] Guild features:`, features);
+		console.log(`[STICKY] sticky_messages enabled:`, features.sticky_messages);
+		
+		if (!features.sticky_messages) {
+			console.log(`[STICKY] Feature not enabled, denying access`);
+			return await interaction.reply({
+				content: '❌ Sticky messages feature is not enabled for this server.',
+				flags: 64 // Ephemeral flag
+			});
+		}
 
 			// Check if there's already a sticky message in this channel
 			const existingSticky = await GuildDatabase.getStickyMessage(guildId, channelId);
@@ -69,14 +75,14 @@ module.exports = {
 
 			await interaction.reply({
 				content: '✅ Sticky message created successfully! It will stay at the bottom of the channel.',
-				ephemeral: true
+				flags: 64 // Ephemeral flag
 			});
 
 		} catch (error) {
 			console.error('Error creating sticky message:', error);
 			await interaction.reply({
 				content: '❌ Failed to create sticky message. Please try again.',
-				ephemeral: true
+				flags: 64 // Ephemeral flag
 			});
 		}
 	},

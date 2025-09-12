@@ -59,6 +59,10 @@ module.exports = {
 			global.commandCount = 0;
 		}
 
+		// Load sticky messages into memory cache
+		console.log('Loading sticky messages into memory cache...');
+		await loadStickyMessages(client);
+
 		// Send initial status to CCC web app
 		await reportBotStatus(client, true);
 
@@ -70,3 +74,47 @@ module.exports = {
 		console.log('🤖 [BOT-MONITOR] Status reporting to CCC web app initialized');
 	},
 };
+
+// Load sticky messages into memory cache
+async function loadStickyMessages(client) {
+	try {
+		const stickyMessages = await GuildDatabase.loadAllStickyMessages();
+		
+		// Initialize global sticky messages cache
+		global.stickyMessages = new Map();
+		
+		let loadedCount = 0;
+		for (const sticky of stickyMessages) {
+			try {
+				// Verify the channel still exists and bot has access
+				const guild = client.guilds.cache.get(sticky.guild_id);
+				if (guild) {
+					const channel = guild.channels.cache.get(sticky.channel_id);
+					if (channel && channel.isTextBased()) {
+						// Store in memory cache
+						global.stickyMessages.set(`${sticky.guild_id}-${sticky.channel_id}`, {
+							messageId: sticky.message_id,
+							content: sticky.content,
+							createdBy: sticky.created_by
+						});
+						loadedCount++;
+					} else {
+						// Channel doesn't exist or bot can't access it, clean up
+						await GuildDatabase.deleteStickyMessage(sticky.guild_id, sticky.channel_id);
+						console.log(`🧹 Cleaned up sticky message for non-existent channel: ${sticky.guild_id}/${sticky.channel_id}`);
+					}
+				} else {
+					// Guild doesn't exist, clean up
+					await GuildDatabase.deleteStickyMessage(sticky.guild_id, sticky.channel_id);
+					console.log(`🧹 Cleaned up sticky message for non-existent guild: ${sticky.guild_id}`);
+				}
+			} catch (error) {
+				console.error(`Error loading sticky message ${sticky.guild_id}/${sticky.channel_id}:`, error);
+			}
+		}
+		
+		console.log(`📌 Loaded ${loadedCount} sticky messages into memory cache`);
+	} catch (error) {
+		console.error('Error loading sticky messages:', error);
+	}
+}

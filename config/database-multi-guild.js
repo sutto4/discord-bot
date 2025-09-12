@@ -427,6 +427,128 @@ class GuildDatabase {
             return false;
         }
     }
+
+    // Sticky Messages Methods
+    
+    // Create a new sticky message
+    static async createStickyMessage(guildId, channelId, content, createdBy) {
+        const query = `
+            INSERT INTO sticky_messages (guild_id, channel_id, message_id, content, created_by) 
+            VALUES (?, ?, '', ?, ?)
+            ON DUPLICATE KEY UPDATE 
+                content = VALUES(content),
+                created_by = VALUES(created_by),
+                updated_at = CURRENT_TIMESTAMP
+        `;
+        
+        try {
+            await pool.execute(query, [guildId, channelId, content, createdBy]);
+            console.log(`Sticky message created for guild ${guildId}, channel ${channelId}`);
+            return true;
+        } catch (error) {
+            console.error('Error creating sticky message:', error);
+            return false;
+        }
+    }
+
+    // Update sticky message content
+    static async updateStickyMessage(guildId, channelId, content, createdBy) {
+        const query = `
+            UPDATE sticky_messages 
+            SET content = ?, created_by = ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE guild_id = ? AND channel_id = ?
+        `;
+        
+        try {
+            const [result] = await pool.execute(query, [content, createdBy, guildId, channelId]);
+            return result.affectedRows > 0;
+        } catch (error) {
+            console.error('Error updating sticky message:', error);
+            return false;
+        }
+    }
+
+    // Update sticky message ID
+    static async updateStickyMessageId(guildId, channelId, messageId) {
+        const query = `
+            UPDATE sticky_messages 
+            SET message_id = ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE guild_id = ? AND channel_id = ?
+        `;
+        
+        try {
+            await pool.execute(query, [messageId, guildId, channelId]);
+            return true;
+        } catch (error) {
+            console.error('Error updating sticky message ID:', error);
+            return false;
+        }
+    }
+
+    // Get sticky message for a channel
+    static async getStickyMessage(guildId, channelId) {
+        const query = `
+            SELECT * FROM sticky_messages 
+            WHERE guild_id = ? AND channel_id = ?
+        `;
+        
+        try {
+            const [rows] = await pool.execute(query, [guildId, channelId]);
+            return rows[0] || null;
+        } catch (error) {
+            console.error('Error getting sticky message:', error);
+            return null;
+        }
+    }
+
+    // Get all sticky messages for a guild
+    static async getGuildStickyMessages(guildId) {
+        const query = `
+            SELECT * FROM sticky_messages 
+            WHERE guild_id = ?
+        `;
+        
+        try {
+            const [rows] = await pool.execute(query, [guildId]);
+            return rows;
+        } catch (error) {
+            console.error('Error getting guild sticky messages:', error);
+            return [];
+        }
+    }
+
+    // Delete sticky message
+    static async deleteStickyMessage(guildId, channelId) {
+        const query = `
+            DELETE FROM sticky_messages 
+            WHERE guild_id = ? AND channel_id = ?
+        `;
+        
+        try {
+            const [result] = await pool.execute(query, [guildId, channelId]);
+            console.log(`Sticky message deleted for guild ${guildId}, channel ${channelId}`);
+            return result.affectedRows > 0;
+        } catch (error) {
+            console.error('Error deleting sticky message:', error);
+            return false;
+        }
+    }
+
+    // Load all sticky messages into memory cache (for bot startup)
+    static async loadAllStickyMessages() {
+        const query = `
+            SELECT * FROM sticky_messages 
+            WHERE message_id != ''
+        `;
+        
+        try {
+            const [rows] = await pool.execute(query);
+            return rows;
+        } catch (error) {
+            console.error('Error loading all sticky messages:', error);
+            return [];
+        }
+    }
 }
 
 module.exports = { pool, GuildDatabase };

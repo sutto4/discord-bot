@@ -1,4 +1,5 @@
 const { appDb } = require('../config/database');
+const { GuildDatabase } = require('../config/database-multi-guild');
 
 module.exports = {
   name: 'messageCreate',
@@ -7,6 +8,8 @@ module.exports = {
     if (message.author.bot || !message.guild) return;
 
     try {
+      // Handle sticky messages
+      await handleStickyMessage(message, client);
       // Check if the message starts with a known command prefix
       const content = message.content.trim();
       if (!content || content.length < 2) return;
@@ -247,5 +250,52 @@ async function logCommandUsage(command, message, responseSent, errorMessage = nu
     );
   } catch (error) {
     console.error('Error logging command usage:', error);
+  }
+}
+
+// Handle sticky message functionality
+async function handleStickyMessage(message, client) {
+  try {
+    const guildId = message.guild.id;
+    const channelId = message.channel.id;
+
+    // Check if sticky messages feature is enabled
+    const features = await GuildDatabase.getGuildFeatures(guildId);
+    if (!features.sticky_messages) return;
+
+    // Check if there's a sticky message for this channel
+    const stickyData = await GuildDatabase.getStickyMessage(guildId, channelId);
+    if (!stickyData || !stickyData.message_id) return;
+
+    // Try to delete the old sticky message
+    try {
+      const oldMessage = await message.channel.messages.fetch(stickyData.message_id);
+      await oldMessage.delete();
+    } catch (error) {
+      // Message might already be deleted, ignore error
+      console.log(`Old sticky message not found or already deleted: ${stickyData.message_id}`);
+    }
+
+    // Post new sticky message
+    const newStickyMessage = await message.channel.send({
+      content: `📌 **Sticky Message**\n${stickyData.content}`,
+      allowedMentions: { parse: [] } // Disable mentions to prevent spam
+    });
+
+    // Update the message ID in database
+    await GuildDatabase.updateStickyMessageId(guildId, channelId, newStickyMessage.id);
+
+    // Update memory cache
+    if (!global.stickyMessages) {
+      global.stickyMessages = new Map();
+    }
+    global.stickyMessages.set(`${guildId}-${channelId}`, {
+      messageId: newStickyMessage.id,
+      content: stickyData.content,
+      createdBy: stickyData.created_by
+    });
+
+  } catch (error) {
+    console.error('Error handling sticky message:', error);
   }
 }

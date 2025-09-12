@@ -1398,6 +1398,12 @@ module.exports = function startServer(client) {
       console.log(`🔍 Found ${removedRows.length} removed guilds and ${deletedRows.length} deleted guilds to clean up`);
       let cleanedCount = 0;
 
+      // Only run cleanup if there are guilds that need cleaning
+      if (removedRows.length === 0 && deletedRows.length === 0) {
+        console.log(`⏭️ No guilds need cleaning, skipping cleanup`);
+        return;
+      }
+
       // Clean up removed guilds (bot was kicked, server still exists)
       for (const row of removedRows) {
         console.log(`🗑️ Cleaning up removed guild: ${row.guild_name} (${row.guild_id})`);
@@ -1406,9 +1412,13 @@ module.exports = function startServer(client) {
         await appDb.query("DELETE FROM guild_commands WHERE guild_id = ?", [row.guild_id]);
         await appDb.query("DELETE FROM guild_features WHERE guild_id = ?", [row.guild_id]);
         await appDb.query("DELETE FROM server_access_control WHERE guild_id = ?", [row.guild_id]);
-        
-        // Keep as removed status (no need for 'cleaned' status)
-        // Status remains 'removed' to indicate bot left the server
+        await appDb.query("DELETE FROM custom_commands WHERE guild_id = ?", [row.guild_id]);
+        await appDb.query("DELETE FROM custom_command_logs WHERE guild_id = ?", [row.guild_id]);
+        await appDb.query("DELETE FROM moderation_cases WHERE guild_id = ?", [row.guild_id]);
+        await appDb.query("DELETE FROM moderation_logs WHERE guild_id = ?", [row.guild_id]);
+        await appDb.query("DELETE FROM feedback_submissions WHERE guild_id = ?", [row.guild_id]);
+        await appDb.query("DELETE FROM verification_logs WHERE guild_id = ?", [row.guild_id]);
+        await appDb.query("DELETE FROM sticky_messages WHERE guild_id = ?", [row.guild_id]);
         
         console.log(`✅ Cleaned up removed guild: ${row.guild_name} (${row.guild_id})`);
         cleanedCount++;

@@ -59,7 +59,7 @@ module.exports = {
 
 			// Post new sticky message
 			const stickyMessage = await interaction.channel.send({
-				content: `📌 **Sticky Message**\n${message}`,
+				content: `${message}`,
 				allowedMentions: { parse: [] } // Disable mentions to prevent spam
 			});
 

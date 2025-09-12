@@ -13,26 +13,29 @@ module.exports = {
 		.setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
 	async execute(interaction) {
-		const guildId = interaction.guild.id;
-		const channelId = interaction.channel.id;
-		const userId = interaction.user.id;
-		const message = interaction.options.getString('message');
-
+		console.log(`[STICKY] Command started - User: ${interaction.user.tag}, Guild: ${interaction.guild?.id}`);
+		
 		try {
-		console.log(`[STICKY] Command executed by ${interaction.user.tag} in guild ${guildId}`);
-		
-		// Check if sticky messages feature is enabled
-		const features = await GuildDatabase.getGuildFeatures(guildId);
-		console.log(`[STICKY] Guild features:`, features);
-		console.log(`[STICKY] sticky_messages enabled:`, features.sticky_messages);
-		
-		if (!features.sticky_messages) {
-			console.log(`[STICKY] Feature not enabled, denying access`);
-			return await interaction.reply({
-				content: '❌ Sticky messages feature is not enabled for this server.',
-				flags: 64 // Ephemeral flag
-			});
-		}
+			const guildId = interaction.guild.id;
+			const channelId = interaction.channel.id;
+			const userId = interaction.user.id;
+			const message = interaction.options.getString('message');
+			
+			console.log(`[STICKY] Parameters - Guild: ${guildId}, Channel: ${channelId}, User: ${userId}, Message: ${message}`);
+			console.log(`[STICKY] Command executed by ${interaction.user.tag} in guild ${guildId}`);
+			
+			// Check if sticky messages feature is enabled
+			const features = await GuildDatabase.getGuildFeatures(guildId);
+			console.log(`[STICKY] Guild features:`, features);
+			console.log(`[STICKY] sticky_messages enabled:`, features.sticky_messages);
+			
+			if (!features.sticky_messages) {
+				console.log(`[STICKY] Feature not enabled, denying access`);
+				return await interaction.reply({
+					content: '❌ Sticky messages feature is not enabled for this server.',
+					flags: 64 // Ephemeral flag
+				});
+			}
 
 			// Check if there's already a sticky message in this channel
 			const existingSticky = await GuildDatabase.getStickyMessage(guildId, channelId);

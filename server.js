@@ -151,7 +151,7 @@ module.exports = function startServer(client) {
 
       // Get all available commands from the database
       var allCommandsResult = await appDb.query(
-        "SELECT DISTINCT command_name, feature_name FROM guild_commands WHERE guild_id = ?",
+        "SELECT DISTINCT command_name, feature_key FROM guild_commands WHERE guild_id = ?",
         [guildId]
       );
       var allCommands = allCommandsResult[0];
@@ -162,14 +162,14 @@ module.exports = function startServer(client) {
 
       // Get current command states for this guild
       var commandStatesResult = await appDb.query(
-        "SELECT command_name, feature_name, enabled FROM guild_commands WHERE guild_id = ?",
+        "SELECT command_name, feature_key, enabled FROM guild_commands WHERE guild_id = ?",
         [guildId]
       );
       var commandStates = commandStatesResult[0];
 
       // Get current feature states for this guild
       var featureStatesResult = await appDb.query(
-        "SELECT feature_name, enabled FROM guild_features WHERE guild_id = ?",
+        "SELECT feature_key, enabled FROM guild_features WHERE guild_id = ?",
         [guildId]
       );
       var featureStates = featureStatesResult[0];
@@ -186,11 +186,11 @@ module.exports = function startServer(client) {
           return s.command_name === cmd.command_name;
         });
         
-        // Use feature_name from database instead of hardcoded mapping
-        var parentFeature = cmd.feature_name;
+        // Use feature_key from database instead of hardcoded mapping
+        var parentFeature = cmd.feature_key;
         
         var featureState = featureStates.find(function(s) {
-          return s.feature_name === parentFeature;
+          return s.feature_key === parentFeature;
         });
 
         // Debug logging for setverifylog
@@ -236,7 +236,7 @@ module.exports = function startServer(client) {
       // Process features
       allFeatures.forEach(function(feature) {
         var featureState = featureStates.find(function(s) {
-          return s.feature_name === feature;
+          return s.feature_key === feature;
         });
 
         // Features are enabled if they're enabled at both admin and guild level
@@ -492,11 +492,11 @@ module.exports = function startServer(client) {
     var features = {};
     try {
       const [rows] = await appDb.query(
-        "SELECT feature_name, enabled FROM guild_features WHERE guild_id = ?",
+        "SELECT feature_key, enabled FROM guild_features WHERE guild_id = ?",
         [guildId]
       );
       for (const row of rows) {
-        features[row.feature_name] = row.enabled === 1 || row.enabled === "1";
+        features[row.feature_key] = row.enabled === 1 || row.enabled === "1";
       }
     } catch {
       // ignore

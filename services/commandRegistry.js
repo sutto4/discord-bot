@@ -594,7 +594,7 @@ class CommandRegistry {
       // Get command definitions from database
       var placeholders = commandNames.map(() => '?').join(',');
       var result = await appDb.query(
-        `SELECT command_name, feature_name, description FROM command_mappings WHERE command_name IN (${placeholders})`,
+        `SELECT command_name, feature_key, description FROM command_mappings WHERE command_name IN (${placeholders})`,
         commandNames
       );
       

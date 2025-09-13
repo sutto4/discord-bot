@@ -204,13 +204,13 @@ class GuildDatabase {
 
     // Get all features for a specific guild
     static async getGuildFeatures(guildId) {
-        const query = 'SELECT feature_name, enabled FROM guild_features WHERE guild_id = ?';
+        const query = 'SELECT feature_key, enabled FROM guild_features WHERE guild_id = ?';
         
         try {
             const [rows] = await pool.execute(query, [guildId]);
             const features = {};
             rows.forEach(row => {
-                features[row.feature_name] = row.enabled === 1;
+                features[row.feature_key] = row.enabled === 1;
             });
             return features;
         } catch (error) {

@@ -1417,7 +1417,6 @@ module.exports = function startServer(client) {
         await appDb.query("DELETE FROM moderation_cases WHERE guild_id = ?", [row.guild_id]);
         await appDb.query("DELETE FROM moderation_logs WHERE guild_id = ?", [row.guild_id]);
         await appDb.query("DELETE FROM feedback_submissions WHERE guild_id = ?", [row.guild_id]);
-        await appDb.query("DELETE FROM verification_logs WHERE guild_id = ?", [row.guild_id]);
         await appDb.query("DELETE FROM sticky_messages WHERE guild_id = ?", [row.guild_id]);
         
         console.log(`✅ Cleaned up removed guild: ${row.guild_name} (${row.guild_id})`);

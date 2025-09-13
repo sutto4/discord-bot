@@ -12,11 +12,11 @@ module.exports = {
 		const channelId = interaction.channel.id;
 
 		try {
-		// Check if sticky messages feature is enabled
+		// Check if moderation feature is enabled (sticky is a moderation command)
 		const features = await GuildDatabase.getGuildFeatures(guildId);
-		if (!features.sticky_messages) {
+		if (!features.moderation) {
 			return await interaction.reply({
-				content: '❌ Sticky messages feature is not enabled for this server.',
+				content: '❌ Moderation feature is not enabled for this server.',
 				flags: 64 // Ephemeral flag
 			});
 		}

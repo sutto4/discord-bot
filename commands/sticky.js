@@ -24,15 +24,15 @@ module.exports = {
 			console.log(`[STICKY] Parameters - Guild: ${guildId}, Channel: ${channelId}, User: ${userId}, Message: ${message}`);
 			console.log(`[STICKY] Command executed by ${interaction.user.tag} in guild ${guildId}`);
 			
-			// Check if sticky messages feature is enabled
+			// Check if moderation feature is enabled (sticky is a moderation command)
 			const features = await GuildDatabase.getGuildFeatures(guildId);
 			console.log(`[STICKY] Guild features:`, features);
-			console.log(`[STICKY] sticky_messages enabled:`, features.sticky_messages);
+			console.log(`[STICKY] moderation enabled:`, features.moderation);
 			
-			if (!features.sticky_messages) {
-				console.log(`[STICKY] Feature not enabled, denying access`);
+			if (!features.moderation) {
+				console.log(`[STICKY] Moderation feature not enabled, denying access`);
 				return await interaction.reply({
-					content: '❌ Sticky messages feature is not enabled for this server.',
+					content: '❌ Moderation feature is not enabled for this server.',
 					flags: 64 // Ephemeral flag
 				});
 			}

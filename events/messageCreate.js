@@ -259,9 +259,9 @@ async function handleStickyMessage(message, client) {
     const guildId = message.guild.id;
     const channelId = message.channel.id;
 
-    // Check if sticky messages feature is enabled
+    // Check if moderation feature is enabled (sticky is a moderation command)
     const features = await GuildDatabase.getGuildFeatures(guildId);
-    if (!features.sticky_messages) return;
+    if (!features.moderation) return;
 
     // Check if there's a sticky message for this channel
     const stickyData = await GuildDatabase.getStickyMessage(guildId, channelId);

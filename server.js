@@ -1419,6 +1419,9 @@ module.exports = function startServer(client) {
         await appDb.query("DELETE FROM feedback_submissions WHERE guild_id = ?", [row.guild_id]);
         await appDb.query("DELETE FROM sticky_messages WHERE guild_id = ?", [row.guild_id]);
         
+        // Mark as cleaned to prevent re-processing
+        await appDb.query("UPDATE guilds SET status = 'left', updated_at = NOW() WHERE guild_id = ?", [row.guild_id]);
+        
         console.log(`✅ Cleaned up removed guild: ${row.guild_name} (${row.guild_id})`);
         cleanedCount++;
       }

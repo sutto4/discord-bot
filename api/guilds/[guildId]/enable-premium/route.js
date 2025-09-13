@@ -138,7 +138,7 @@ async function enablePremiumFeatures(guildId) {
       console.log(`Enabling feature: ${featureName} for guild ${guildId}`);
       
              await appDb.execute(`
-         INSERT INTO guild_features (guild_id, feature_name, enabled) 
+         INSERT INTO guild_features (guild_id, feature_key, enabled) 
          VALUES (?, ?, 1) 
          ON DUPLICATE KEY UPDATE enabled = 1, updated_at = CURRENT_TIMESTAMP
        `, [guildId, featureName]);

@@ -135,7 +135,7 @@ A comprehensive Discord bot for managing donator roles, verification, server inf
 - Premium guilds can customize the prefix via `/setprefix`
 - Access is controlled by the `custom_prefix` feature flag in the database:
   - Enable for a guild (SQL):
-    - `INSERT INTO guild_features (guild_id, feature_name, enabled) VALUES ('GUILD_ID','custom_prefix',1) ON DUPLICATE KEY UPDATE enabled=1;`
+    - `INSERT INTO guild_features (guild_id, feature_key, enabled) VALUES ('GUILD_ID','custom_prefix',1) ON DUPLICATE KEY UPDATE enabled=1;`
 - The active prefix is stored per guild in `data/prefixes.json`
 
 ## File Structure

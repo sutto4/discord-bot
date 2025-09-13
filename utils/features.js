@@ -32,7 +32,7 @@ async function hasFeature(guildId, featureName) {
 
 	try {
 		const [rows] = await db.execute(
-			'SELECT enabled FROM guild_features WHERE guild_id = ? AND feature_name = ? LIMIT 1',
+			'SELECT enabled FROM guild_features WHERE guild_id = ? AND feature_key = ? LIMIT 1',
 			[guildId, featureName]
 		);
 		const value = !!rows?.[0]?.enabled;

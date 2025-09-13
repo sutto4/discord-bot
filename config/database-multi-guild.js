@@ -154,11 +154,11 @@ class GuildDatabase {
     }
 
     // Check if guild has a specific feature enabled
-    static async hasFeature(guildId, featureName) {
-        const query = 'SELECT enabled FROM guild_features WHERE guild_id = ? AND feature_name = ?';
+    static async hasFeature(guildId, featureKey) {
+        const query = 'SELECT enabled FROM guild_features WHERE guild_id = ? AND feature_key = ?';
         
         try {
-            const [rows] = await pool.execute(query, [guildId, featureName]);
+            const [rows] = await pool.execute(query, [guildId, featureKey]);
             return rows.length > 0 && rows[0].enabled === 1;
         } catch (error) {
             console.error('Error checking guild feature:', error);
@@ -167,9 +167,9 @@ class GuildDatabase {
     }
 
     // Enable/disable a feature for a guild
-    static async setFeature(guildId, featureName, enabled) {
+    static async setFeature(guildId, featureKey, enabled) {
         const query = `
-            INSERT INTO guild_features (guild_id, feature_name, enabled) 
+            INSERT INTO guild_features (guild_id, feature_key, enabled) 
             VALUES (?, ?, ?) 
             ON DUPLICATE KEY UPDATE 
                 enabled = VALUES(enabled),
@@ -177,24 +177,24 @@ class GuildDatabase {
         `;
         
         try {
-            await pool.execute(query, [guildId, featureName, enabled]);
-            console.log(`Guild ${guildId} feature '${featureName}' ${enabled ? 'enabled' : 'disabled'}`);
+            await pool.execute(query, [guildId, featureKey, enabled]);
+            console.log(`Guild ${guildId} feature '${featureKey}' ${enabled ? 'enabled' : 'disabled'}`);
         } catch (error) {
             console.error('Error setting guild feature:', error);
         }
     }
 
     // Get guilds with a specific feature enabled
-    static async getGuildsWithFeature(featureName) {
+    static async getGuildsWithFeature(featureKey) {
         const query = `
             SELECT g.guild_id, g.guild_name 
             FROM guilds g
             INNER JOIN guild_features gf ON g.guild_id = gf.guild_id
-            WHERE gf.feature_name = ? AND gf.enabled = 1
+            WHERE gf.feature_key = ? AND gf.enabled = 1
         `;
         
         try {
-            const [rows] = await pool.execute(query, [featureName]);
+            const [rows] = await pool.execute(query, [featureKey]);
             return rows;
         } catch (error) {
             console.error('Error getting guilds with feature:', error);
@@ -243,7 +243,7 @@ class GuildDatabase {
                 const flatValues = values.flat();
                 
                 await pool.execute(
-                    `INSERT INTO guild_features (guild_id, feature_name, enabled) VALUES ${placeholders}`,
+                    `INSERT INTO guild_features (guild_id, feature_key, enabled) VALUES ${placeholders}`,
                     flatValues
                 );
             }

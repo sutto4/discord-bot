@@ -1,11 +1,11 @@
 // api/lib/features.js
-const isFeatureEnabled = async (db, guildId, featureName) => {
+const isFeatureEnabled = async (db, guildId, featureKey) => {
 	const [rows] = await db.query(
 		`SELECT enabled
 		   FROM guild_features
-		  WHERE guild_id = ? AND feature_name = ?
+		  WHERE guild_id = ? AND feature_key = ?
 		  LIMIT 1`,
-		[guildId, featureName]
+		[guildId, featureKey]
 	);
 	if (!rows || rows.length === 0) return false;
 	return String(rows[0].enabled) === '1';

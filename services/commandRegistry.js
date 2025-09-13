@@ -779,6 +779,16 @@ class CommandRegistry {
                     { name: 'Last 30 days', value: '30d' },
                     { name: 'All time', value: 'all' }
                   ]
+                },
+                {
+                  name: 'scope',
+                  description: 'Which channels to search in',
+                  type: 3, // STRING
+                  required: true,
+                  choices: [
+                    { name: 'Current channel only', value: 'channel' },
+                    { name: 'All channels in server', value: 'server' }
+                  ]
                 }
               ]
             }

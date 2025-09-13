@@ -42,6 +42,14 @@ module.exports = {
 							{ name: 'Last 7 days', value: '7d' },
 							{ name: 'Last 30 days', value: '30d' },
 							{ name: 'All time', value: 'all' }
+						))
+				.addStringOption(option =>
+					option.setName('scope')
+						.setDescription('Which channels to search in')
+						.setRequired(true)
+						.setChoices(
+							{ name: 'Current channel only', value: 'channel' },
+							{ name: 'All channels in server', value: 'server' }
 						)))
 		.setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
@@ -207,6 +215,7 @@ async function handleFromPrune(interaction, channel) {
 async function handleUserPrune(interaction, channel) {
 	const target = interaction.options.getUser('target');
 	const duration = interaction.options.getString('duration');
+	const scope = interaction.options.getString('scope');
 	
 	// Defer reply since this might take a moment
 	await interaction.deferReply({ flags: 64 });
@@ -231,23 +240,56 @@ async function handleUserPrune(interaction, channel) {
 		
 		// Count messages from user in time period
 		let messageCount = 0;
-		let lastMessageId = null;
 		
-		while (true) {
-			const options = { limit: 100 };
-			if (lastMessageId) options.before = lastMessageId;
+		if (scope === 'channel') {
+			// Count messages in current channel only
+			let lastMessageId = null;
 			
-			const messages = await channel.messages.fetch(options);
-			const relevantMessages = messages.filter(msg => 
-				msg.author.id === target.id && 
-				msg.createdAt >= startTime && 
-				!msg.pinned
-			);
+			while (true) {
+				const options = { limit: 100 };
+				if (lastMessageId) options.before = lastMessageId;
+				
+				const messages = await channel.messages.fetch(options);
+				const relevantMessages = messages.filter(msg => 
+					msg.author.id === target.id && 
+					msg.createdAt >= startTime && 
+					!msg.pinned
+				);
+				
+				messageCount += relevantMessages.size;
+				
+				if (messages.size < 100) break;
+				lastMessageId = messages.last().id;
+			}
+		} else {
+			// Count messages in all channels
+			const channels = interaction.guild.channels.cache.filter(ch => ch.isTextBased());
 			
-			messageCount += relevantMessages.size;
-			
-			if (messages.size < 100) break;
-			lastMessageId = messages.last().id;
+			for (const ch of channels.values()) {
+				try {
+					let lastMessageId = null;
+					
+					while (true) {
+						const options = { limit: 100 };
+						if (lastMessageId) options.before = lastMessageId;
+						
+						const messages = await ch.messages.fetch(options);
+						const relevantMessages = messages.filter(msg => 
+							msg.author.id === target.id && 
+							msg.createdAt >= startTime && 
+							!msg.pinned
+						);
+						
+						messageCount += relevantMessages.size;
+						
+						if (messages.size < 100) break;
+						lastMessageId = messages.last().id;
+					}
+				} catch (error) {
+					// Skip channels we can't access
+					console.log(`[PRUNE] Cannot access channel ${ch.name}: ${error.message}`);
+				}
+			}
 		}
 		
 		if (messageCount === 0) {
@@ -264,7 +306,8 @@ async function handleUserPrune(interaction, channel) {
 				.setDescription(`This will delete **${messageCount}** messages from ${target.tag}.\n\nAre you sure you want to continue?`)
 				.addFields(
 					{ name: 'User', value: `${target.tag} (${target.id})`, inline: true },
-					{ name: 'Time period', value: duration === 'all' ? 'All time' : `Last ${duration}`, inline: true }
+					{ name: 'Time period', value: duration === 'all' ? 'All time' : `Last ${duration}`, inline: true },
+					{ name: 'Scope', value: scope === 'channel' ? 'Current channel only' : 'All channels in server', inline: true }
 				)
 				.setFooter({ text: 'This action cannot be undone!' });
 			
@@ -276,30 +319,67 @@ async function handleUserPrune(interaction, channel) {
 		
 		// Proceed with deletion
 		let deletedCount = 0;
-		lastMessageId = null;
 		
-		while (true) {
-			const options = { limit: 100 };
-			if (lastMessageId) options.before = lastMessageId;
+		if (scope === 'channel') {
+			// Delete messages in current channel only
+			let lastMessageId = null;
 			
-			const messages = await channel.messages.fetch(options);
-			const messagesToDelete = messages.filter(msg => 
-				msg.author.id === target.id && 
-				msg.createdAt >= startTime && 
-				!msg.pinned
-			);
-			
-			if (messagesToDelete.size > 0) {
-				await channel.bulkDelete(messagesToDelete, true);
-				deletedCount += messagesToDelete.size;
+			while (true) {
+				const options = { limit: 100 };
+				if (lastMessageId) options.before = lastMessageId;
+				
+				const messages = await channel.messages.fetch(options);
+				const messagesToDelete = messages.filter(msg => 
+					msg.author.id === target.id && 
+					msg.createdAt >= startTime && 
+					!msg.pinned
+				);
+				
+				if (messagesToDelete.size > 0) {
+					await channel.bulkDelete(messagesToDelete, true);
+					deletedCount += messagesToDelete.size;
+				}
+				
+				if (messages.size < 100) break;
+				lastMessageId = messages.last().id;
 			}
+		} else {
+			// Delete messages in all channels
+			const channels = interaction.guild.channels.cache.filter(ch => ch.isTextBased());
 			
-			if (messages.size < 100) break;
-			lastMessageId = messages.last().id;
+			for (const ch of channels.values()) {
+				try {
+					let lastMessageId = null;
+					
+					while (true) {
+						const options = { limit: 100 };
+						if (lastMessageId) options.before = lastMessageId;
+						
+						const messages = await ch.messages.fetch(options);
+						const messagesToDelete = messages.filter(msg => 
+							msg.author.id === target.id && 
+							msg.createdAt >= startTime && 
+							!msg.pinned
+						);
+						
+						if (messagesToDelete.size > 0) {
+							await ch.bulkDelete(messagesToDelete, true);
+							deletedCount += messagesToDelete.size;
+						}
+						
+						if (messages.size < 100) break;
+						lastMessageId = messages.last().id;
+					}
+				} catch (error) {
+					// Skip channels we can't access
+					console.log(`[PRUNE] Cannot delete from channel ${ch.name}: ${error.message}`);
+				}
+			}
 		}
 		
+		const scopeText = scope === 'channel' ? 'current channel' : 'all channels';
 		await interaction.editReply({
-			content: `✅ Successfully deleted ${deletedCount} message(s) from ${target.tag} in the last ${duration === 'all' ? 'all time' : duration}.`
+			content: `✅ Successfully deleted ${deletedCount} message(s) from ${target.tag} in the last ${duration === 'all' ? 'all time' : duration} from ${scopeText}.`
 		});
 		
 		console.log(`[PRUNE] Deleted ${deletedCount} messages from user ${target.tag} in ${duration}`);

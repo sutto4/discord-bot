@@ -1378,8 +1378,6 @@ module.exports = function startServer(client) {
           console.log(`🗑️ Marking guild as removed: ${guild.guild_name} (${guild.guild_id}) - bot no longer in this server`);
           await appDb.query("UPDATE guilds SET status = 'removed', updated_at = NOW() WHERE guild_id = ?", [guild.guild_id]);
           markedAsRemoved++;
-        } else if (guild.status === 'left') {
-          console.log(`⏭️ Skipping guild already marked as left: ${guild.guild_name} (${guild.guild_id})`);
         }
       }
       

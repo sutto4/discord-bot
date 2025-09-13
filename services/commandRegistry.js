@@ -725,6 +725,64 @@ class CommandRegistry {
               required: true
             }
           ];
+        } else if (row.command_name === 'prune') {
+          command.options = [
+            {
+              name: 'count',
+              description: 'Delete the last N messages',
+              type: 1, // SUB_COMMAND
+              options: [
+                {
+                  name: 'amount',
+                  description: 'Number of messages to delete (1-100)',
+                  type: 4, // INTEGER
+                  required: true,
+                  min_value: 1,
+                  max_value: 100
+                }
+              ]
+            },
+            {
+              name: 'from',
+              description: 'Delete all messages from a specific message ID to the end',
+              type: 1, // SUB_COMMAND
+              options: [
+                {
+                  name: 'message_id',
+                  description: 'The message ID to start deleting from',
+                  type: 3, // STRING
+                  required: true
+                }
+              ]
+            },
+            {
+              name: 'user',
+              description: 'Delete messages from a specific user within a time period',
+              type: 1, // SUB_COMMAND
+              options: [
+                {
+                  name: 'target',
+                  description: 'The user whose messages to delete',
+                  type: 6, // USER
+                  required: true
+                },
+                {
+                  name: 'duration',
+                  description: 'Time period to look back',
+                  type: 3, // STRING
+                  required: true,
+                  choices: [
+                    { name: 'Last hour', value: '1h' },
+                    { name: 'Last 6 hours', value: '6h' },
+                    { name: 'Last 24 hours', value: '24h' },
+                    { name: 'Last 7 days', value: '7d' },
+                    { name: 'Last 30 days', value: '30d' },
+                    { name: 'All time', value: 'all' }
+                  ]
+                }
+              ]
+            }
+          ];
         }
         // Add more command options as needed...
         

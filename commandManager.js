@@ -58,6 +58,9 @@ class CommandManager {
         case 'unsticky':
           await this.handleUnsticky(interaction);
           break;
+        case 'prune':
+          await this.handlePrune(interaction);
+          break;
         default:
           await interaction.reply({ 
             content: 'Unknown command', 
@@ -195,6 +198,12 @@ class CommandManager {
     // Reuse the existing unsticky command handler
     const unstickyCommand = require('./commands/unsticky');
     await unstickyCommand.execute(interaction);
+  }
+
+  async handlePrune(interaction) {
+    // Reuse the existing prune command handler
+    const pruneCommand = require('./commands/prune');
+    await pruneCommand.execute(interaction);
   }
 }
 

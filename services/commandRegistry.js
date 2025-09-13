@@ -6,7 +6,7 @@ class CommandRegistry {
 
   async registerCommands(guildId, features) {
     try {
-      var commands = this.getCommandsForFeatures(features);
+      var commands = await this.getCommandsForFeatures(features);
       
       console.log(`[COMMAND-REGISTRY] Registering commands for guild ${guildId}:`, commands);
       
@@ -53,7 +53,7 @@ class CommandRegistry {
       console.log(`[COMMAND-REGISTRY] Updating commands for guild ${guildId} with features:`, features);
 
       // Get all commands for current features
-      var allCommands = this.getCommandsForFeatures(features);
+      var allCommands = await this.getCommandsForFeatures(features);
       console.log(`[COMMAND-REGISTRY] Generated ${allCommands.length} commands for features:`, allCommands.map(cmd => cmd.name));
 
       // When called from admin page, features already represent enabled commands
@@ -110,17 +110,17 @@ class CommandRegistry {
     }
   }
 
-  getCommandsForFeatures(features) {
+  async getCommandsForFeatures(features) {
     var allCommands = [];
     
     // Check if we're getting individual command names or feature names
     var isIndividualCommands = features.some(function(feature) {
-      return ['warn', 'kick', 'ban', 'mute', 'unmute', 'role', 'custom', 'sendverify', 'setverifylog', 'feedback', 'embed'].includes(feature);
+      return ['warn', 'kick', 'ban', 'mute', 'unmute', 'role', 'custom', 'sendverify', 'setverifylog', 'feedback', 'embed', 'sticky', 'unsticky'].includes(feature);
     });
     
     if (isIndividualCommands) {
-      // Handle individual command names
-      return this.getCommandsForIndividualCommands(features);
+      // Handle individual command names - get from database
+      return await this.getCommandsForIndividualCommandsFromDB(features);
     }
     
     if (features.includes('moderation')) {
@@ -584,6 +584,159 @@ class CommandRegistry {
     }
     
     return allCommands;
+  }
+
+  async getCommandsForIndividualCommandsFromDB(commandNames) {
+    try {
+      // Import database connection
+      var appDb = require('../config/database').appDb;
+      
+      // Get command definitions from database
+      var placeholders = commandNames.map(() => '?').join(',');
+      var result = await appDb.query(
+        `SELECT command_name, feature_name, description FROM command_mappings WHERE command_name IN (${placeholders})`,
+        commandNames
+      );
+      
+      var commands = [];
+      result[0].forEach(function(row) {
+        // Convert database row to Discord command format
+        var command = {
+          name: row.command_name,
+          description: row.description,
+          options: []
+        };
+        
+        // Add specific options based on command name
+        if (row.command_name === 'sticky') {
+          command.options = [
+            {
+              name: 'message',
+              description: 'The message to make sticky',
+              type: 3,
+              required: true
+            }
+          ];
+        } else if (row.command_name === 'unsticky') {
+          command.options = [];
+        } else if (row.command_name === 'warn') {
+          command.options = [
+            {
+              name: 'user',
+              description: 'The user to warn',
+              type: 6,
+              required: true
+            },
+            {
+              name: 'reason',
+              description: 'Reason for the warning',
+              type: 3,
+              required: false
+            }
+          ];
+        } else if (row.command_name === 'kick') {
+          command.options = [
+            {
+              name: 'user',
+              description: 'The user to kick',
+              type: 6,
+              required: true
+            },
+            {
+              name: 'reason',
+              description: 'Reason for the kick',
+              type: 3,
+              required: false
+            }
+          ];
+        } else if (row.command_name === 'ban') {
+          command.options = [
+            {
+              name: 'user',
+              description: 'The user to ban',
+              type: 6,
+              required: true
+            },
+            {
+              name: 'reason',
+              description: 'Reason for the ban',
+              type: 3,
+              required: false
+            },
+            {
+              name: 'duration',
+              description: 'Duration of the ban (e.g., 7d, 30d)',
+              type: 3,
+              required: false
+            }
+          ];
+        } else if (row.command_name === 'mute') {
+          command.options = [
+            {
+              name: 'user',
+              description: 'The user to mute',
+              type: 6,
+              required: true
+            },
+            {
+              name: 'duration',
+              description: 'Duration of the mute (e.g., 1h, 7d)',
+              type: 3,
+              required: true
+            },
+            {
+              name: 'reason',
+              description: 'Reason for the mute',
+              type: 3,
+              required: false
+            }
+          ];
+        } else if (row.command_name === 'unmute') {
+          command.options = [
+            {
+              name: 'user',
+              description: 'The user to unmute',
+              type: 6,
+              required: true
+            }
+          ];
+        } else if (row.command_name === 'role') {
+          command.options = [
+            {
+              name: 'action',
+              description: 'Action to perform',
+              type: 3,
+              required: true,
+              choices: [
+                { name: 'Add', value: 'add' },
+                { name: 'Remove', value: 'remove' }
+              ]
+            },
+            {
+              name: 'user',
+              description: 'The user to manage',
+              type: 6,
+              required: true
+            },
+            {
+              name: 'role',
+              description: 'The role to add/remove',
+              type: 8,
+              required: true
+            }
+          ];
+        }
+        // Add more command options as needed...
+        
+        commands.push(command);
+      });
+      
+      return commands;
+    } catch (error) {
+      console.error('[COMMAND-REGISTRY] Error getting commands from database:', error);
+      // Fallback to hardcoded commands
+      return this.getCommandsForIndividualCommands(commandNames);
+    }
   }
 
   getRegisteredCommands(guildId) {

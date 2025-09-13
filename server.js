@@ -1372,12 +1372,14 @@ module.exports = function startServer(client) {
       
       let markedAsRemoved = 0;
       
-      // Mark guilds as 'removed' if bot is no longer in them
+      // Mark guilds as 'removed' if bot is no longer in them (but skip if already 'left')
       for (const guild of leftGuilds) {
-        if (guild.status !== 'removed' && guild.status !== 'deleted') {
+        if (guild.status !== 'removed' && guild.status !== 'deleted' && guild.status !== 'left') {
           console.log(`🗑️ Marking guild as removed: ${guild.guild_name} (${guild.guild_id}) - bot no longer in this server`);
           await appDb.query("UPDATE guilds SET status = 'removed', updated_at = NOW() WHERE guild_id = ?", [guild.guild_id]);
           markedAsRemoved++;
+        } else if (guild.status === 'left') {
+          console.log(`⏭️ Skipping guild already marked as left: ${guild.guild_name} (${guild.guild_id})`);
         }
       }
       

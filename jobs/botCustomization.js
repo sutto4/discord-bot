@@ -217,14 +217,48 @@ async function immediateBotCustomizationUpdate(guildId) {
     // Apply bot avatar change
     if (settings.bot_avatar && settings.bot_avatar.trim() !== '') {
       try {
+        const avatarUrl = settings.bot_avatar.trim();
+        
+        // Validate URL format
+        try {
+          new URL(avatarUrl);
+        } catch (urlError) {
+          console.error(`[BOT-CUSTOMIZATION] Invalid avatar URL: ${avatarUrl}`);
+          return false;
+        }
+        
         // Check if avatar actually changed to avoid rate limiting
         const currentAvatarURL = global.client.user.displayAvatarURL({ dynamic: true });
         const currentAvatarBase = currentAvatarURL.split('?')[0];
-        const newAvatarBase = settings.bot_avatar.trim().split('?')[0];
+        const newAvatarBase = avatarUrl.split('?')[0];
 
         if (newAvatarBase !== currentAvatarBase) {
-          await global.client.user.setAvatar(settings.bot_avatar.trim());
-          console.log(`[BOT-CUSTOMIZATION] Bot avatar updated`);
+          console.log(`[BOT-CUSTOMIZATION] Avatar URLs differ - updating avatar`);
+          console.log(`[BOT-CUSTOMIZATION] Current: ${currentAvatarBase}`);
+          console.log(`[BOT-CUSTOMIZATION] New: ${newAvatarBase}`);
+
+          // Download the image and set it as avatar
+          const response = await fetch(avatarUrl, {
+            headers: {
+              'User-Agent': 'ServerMate/1.0'
+            },
+            timeout: 10000 // 10 second timeout
+          });
+          
+          if (response.ok) {
+            const buffer = await response.arrayBuffer();
+            
+            // Validate image size (Discord has a 8MB limit)
+            if (buffer.byteLength > 8 * 1024 * 1024) {
+              console.error(`[BOT-CUSTOMIZATION] Avatar too large: ${buffer.byteLength} bytes (max 8MB)`);
+              return false;
+            }
+            
+            await global.client.user.setAvatar(Buffer.from(buffer));
+            console.log(`[BOT-CUSTOMIZATION] Bot avatar updated successfully`);
+          } else {
+            console.error(`[BOT-CUSTOMIZATION] Failed to download avatar from ${avatarUrl}: ${response.status} ${response.statusText}`);
+          }
         } else {
           console.log(`[BOT-CUSTOMIZATION] Avatar unchanged - skipping update to avoid rate limit`);
         }

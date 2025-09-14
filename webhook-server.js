@@ -28,6 +28,25 @@ app.post('/api/bot-customization/update', async (req, res) => {
     
     console.log(`[WEBHOOK] Received immediate update request for guild: ${guildId}`);
     
+    // Wait for client to be ready (with timeout)
+    let attempts = 0;
+    const maxAttempts = 10;
+    const delay = 1000; // 1 second
+    
+    while (!global.client && attempts < maxAttempts) {
+      console.log(`[WEBHOOK] Waiting for Discord client to be ready... (attempt ${attempts + 1}/${maxAttempts})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      attempts++;
+    }
+    
+    if (!global.client) {
+      console.error('[WEBHOOK] Discord client not available after waiting');
+      return res.status(503).json({ 
+        error: 'Discord client not ready',
+        message: 'Bot is still starting up, please try again in a moment'
+      });
+    }
+    
     // Trigger the immediate update
     const success = await immediateBotCustomizationUpdate(guildId);
     

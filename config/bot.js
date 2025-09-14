@@ -54,6 +54,9 @@ for (const file of eventFiles) {
 client.once('ready', async () => {
 	console.log(`Logged in as ${client.user.tag}`);
 
+	// Make client available globally for webhook server
+	global.client = client;
+
 	await syncDonators(client); // Run once on startup
 
 	const minutes = 720; // Change this to however often you want

@@ -182,6 +182,12 @@ async function immediateBotCustomizationUpdate(guildId) {
   try {
     console.log(`[BOT-CUSTOMIZATION] Immediate update requested for guild: ${guildId}`);
     
+    // Check if client is available
+    if (!global.client) {
+      console.log(`[BOT-CUSTOMIZATION] Discord client not available yet, skipping immediate update`);
+      return false;
+    }
+    
     // Get the guild
     const guild = global.client.guilds.cache.get(guildId);
     if (!guild) {

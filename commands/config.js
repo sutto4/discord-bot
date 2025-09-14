@@ -33,8 +33,11 @@ async function getCurrentConfig(guildId) {
 			[guildId]
 		);
 		
+		console.log('Database query result for guild', guildId, ':', rows);
+		
 		if (rows.length > 0) {
 			const config = rows[0];
+			console.log('Config values:', config);
 			return {
 				verifyLogChannel: config.verify_channel_id ? `<#${config.verify_channel_id}>` : 'Not set',
 				feedbackChannel: config.feedback_channel_id ? `<#${config.feedback_channel_id}>` : 'Not set',
@@ -49,10 +52,11 @@ async function getCurrentConfig(guildId) {
 		};
 	} catch (error) {
 		console.error('Error fetching config from database:', error);
+		console.error('Guild ID:', guildId);
 		return {
-			verifyLogChannel: 'Error loading',
-			feedbackChannel: 'Error loading',
-			verifyRoleId: 'Error loading'
+			verifyLogChannel: 'Database error',
+			feedbackChannel: 'Database error',
+			verifyRoleId: 'Database error'
 		};
 	}
 }

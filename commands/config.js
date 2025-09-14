@@ -36,9 +36,9 @@ async function getCurrentConfig(guildId) {
 		if (rows.length > 0) {
 			const config = rows[0];
 			return {
-				verifyLogChannel: config.verify_channel_id || 'Not set',
-				feedbackChannel: config.feedback_channel_id || 'Not set',
-				verifyRoleId: config.verify_role_id || 'Not set'
+				verifyLogChannel: config.verify_channel_id ? `<#${config.verify_channel_id}>` : 'Not set',
+				feedbackChannel: config.feedback_channel_id ? `<#${config.feedback_channel_id}>` : 'Not set',
+				verifyRoleId: config.verify_role_id ? `<@&${config.verify_role_id}>` : 'Not set'
 			};
 		}
 		

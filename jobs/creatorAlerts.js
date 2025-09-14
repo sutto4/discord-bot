@@ -404,6 +404,17 @@ async function sendLiveNotification(client, guildId, channelId, creator, streamD
         const config = platformConfig[platform] || platformConfig.twitch;
         const thumbnailUrl = config.getThumbnail();
 
+        // Get creator's profile image
+        let profileImageUrl = null;
+        if (platform === 'twitch' && streamData) {
+            // Twitch provides user profile images in the stream data
+            profileImageUrl = streamData.user_profile_image_url || streamData.profile_image_url;
+        } else if (platform === 'youtube' && streamData) {
+            // YouTube provides channel thumbnails
+            profileImageUrl = streamData.channelThumbnail || streamData.thumbnails?.default?.url;
+        }
+        // Note: Kick and TikTok don't provide profile images in their public APIs
+
         // Create rich embed
         const embed = {
             color: config.color,
@@ -412,6 +423,12 @@ async function sendLiveNotification(client, guildId, channelId, creator, streamD
             description: `**${creator}** is now live streaming!`,
             fields: [],
             thumbnail: thumbnailUrl ? { url: thumbnailUrl } : undefined,
+            author: profileImageUrl ? {
+                name: creator,
+                icon_url: profileImageUrl
+            } : {
+                name: creator
+            },
             timestamp: new Date().toISOString(),
             footer: {
                 text: `ServerMate Creator Alerts • ${platform.charAt(0).toUpperCase() + platform.slice(1)}${platform === 'youtube' ? ' • Live data may be delayed' : ''}`
@@ -546,7 +563,14 @@ async function sendLiveNotification(client, guildId, channelId, creator, streamD
         // Add role mention if specified
         let content = '';
         if (discordUserId) {
-            content = `<@${discordUserId}>, you have a creator alert!`;
+            // Get custom message from database if available
+            const [customMessageRow] = await appDb.query(
+                'SELECT custom_message FROM creator_alert_rules WHERE guild_id = ? AND creator = ? AND platform = ?',
+                [guildId, creator, platform]
+            );
+            
+            const customMessage = customMessageRow[0]?.custom_message || `@${creator}, you have a creator alert!`;
+            content = customMessage.replace('[user]', `<@${discordUserId}>`);
         }
 
         // Send the notification

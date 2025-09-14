@@ -491,15 +491,61 @@ module.exports = function startServer(client) {
   async function buildFeatureFlags(guildId) {
     var features = {};
     try {
-      const [rows] = await appDb.query(
+      // Get guild premium status
+      const [guildRows] = await appDb.query(
+        "SELECT premium FROM guilds WHERE guild_id = ?",
+        [guildId]
+      );
+      const isPremium = guildRows.length > 0 && guildRows[0].premium === 1;
+      
+      console.log(`[FEATURES-GET] Guild ${guildId} premium status:`, {
+        hasGuildRecord: guildRows.length > 0,
+        isPremium: isPremium,
+        premiumValue: guildRows.length > 0 ? guildRows[0].premium : 'N/A'
+      });
+
+      // Get all available features with their package requirements
+      const [featureRows] = await appDb.query(
+        "SELECT feature_key, minimum_package FROM features WHERE is_active = 1"
+      );
+      
+      console.log(`[FEATURES-GET] Available features:`, featureRows.map(f => `${f.feature_key} (${f.minimum_package})`));
+
+      // Get guild-specific feature overrides
+      const [guildFeatureRows] = await appDb.query(
         "SELECT feature_key, enabled FROM guild_features WHERE guild_id = ?",
         [guildId]
       );
-      for (const row of rows) {
-        features[row.feature_key] = row.enabled === 1 || row.enabled === "1";
+
+      // Create a map of guild-specific overrides
+      const guildOverrides = {};
+      for (const row of guildFeatureRows) {
+        guildOverrides[row.feature_key] = row.enabled === 1 || row.enabled === "1";
       }
-    } catch {
-      // ignore
+      
+      console.log(`[FEATURES-GET] Guild overrides:`, guildOverrides);
+
+      // Build features object with proper premium/free logic
+      for (const feature of featureRows) {
+        const featureKey = feature.feature_key;
+        const isPremiumFeature = feature.minimum_package === 'premium';
+        
+        // Check if there's a guild-specific override
+        if (guildOverrides.hasOwnProperty(featureKey)) {
+          features[featureKey] = guildOverrides[featureKey];
+        } else {
+          // No override - use default logic
+          if (isPremiumFeature) {
+            features[featureKey] = isPremium; // Premium features only available to premium guilds
+          } else {
+            features[featureKey] = true; // Free features available to all guilds
+          }
+        }
+      }
+
+      console.log(`[FEATURES-GET] Features response:`, features);
+    } catch (error) {
+      console.error("Error building feature flags:", error);
     }
     return features;
   }

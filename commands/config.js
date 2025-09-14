@@ -25,15 +25,36 @@ function writeConfig(filePath, data) {
 	fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
-function getCurrentConfig(guildId) {
-	const verifyLogs = readConfig(verifyLogPath);
-	const feedbackChannels = readConfig(feedbackPath);
-	
-	return {
-		verifyLogChannel: verifyLogs[guildId] || 'Not set',
-		feedbackChannel: feedbackChannels[guildId] || 'Not set',
-		verifyRoleId: process.env.VERIFY_ROLE_ID || 'Not set'
-	};
+async function getCurrentConfig(guildId) {
+	try {
+		const { query } = require('../config/database-multi-guild');
+		const [rows] = await query(
+			`SELECT verify_channel_id, feedback_channel_id, verify_role_id FROM guilds WHERE guild_id = ?`,
+			[guildId]
+		);
+		
+		if (rows.length > 0) {
+			const config = rows[0];
+			return {
+				verifyLogChannel: config.verify_channel_id || 'Not set',
+				feedbackChannel: config.feedback_channel_id || 'Not set',
+				verifyRoleId: config.verify_role_id || 'Not set'
+			};
+		}
+		
+		return {
+			verifyLogChannel: 'Not set',
+			feedbackChannel: 'Not set',
+			verifyRoleId: 'Not set'
+		};
+	} catch (error) {
+		console.error('Error fetching config from database:', error);
+		return {
+			verifyLogChannel: 'Error loading',
+			feedbackChannel: 'Error loading',
+			verifyRoleId: 'Error loading'
+		};
+	}
 }
 
 module.exports = {
@@ -50,7 +71,7 @@ module.exports = {
 			});
 		}
 
-		const currentConfig = getCurrentConfig(interaction.guild.id);
+		const currentConfig = await getCurrentConfig(interaction.guild.id);
 		
 		// Create configuration overview embed
 		const configEmbed = new EmbedBuilder()

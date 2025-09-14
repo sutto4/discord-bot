@@ -438,30 +438,44 @@ module.exports = {
 				const selectedRoleId = interaction.values[0];
 				const selectedRole = interaction.guild.roles.cache.get(selectedRoleId);
 				
-				// Update environment variable or config file
-				// For now, we'll just show a success message
-				const successEmbed = new EmbedBuilder()
-					.setTitle('✅ Verify Role Configured')
-					.setDescription(`Verify role has been set to ${selectedRole}`)
-					.setColor(0x00FF99)
-					.addFields({
-						name: '🔄 Next Step',
-						value: 'The verify role is now configured. You can run `/config` again to make changes.',
-						inline: false
-					});
-
-				const doneButton = new ActionRowBuilder()
-					.addComponents(
-						new ButtonBuilder()
-							.setCustomId('config_complete')
-							.setLabel('✅ Done')
-							.setStyle(ButtonStyle.Success)
+				try {
+					// Update verify role in database
+					const { query } = require('../config/database-multi-guild');
+					await query(
+						`UPDATE guilds SET verify_role_id = ? WHERE guild_id = ?`,
+						[selectedRoleId, interaction.guild.id]
 					);
 
-				await interaction.update({
-					embeds: [successEmbed],
-					components: [doneButton]
-				});
+					const successEmbed = new EmbedBuilder()
+						.setTitle('✅ Verify Role Configured')
+						.setDescription(`Verify role has been set to ${selectedRole}`)
+						.setColor(0x00FF99)
+						.addFields({
+							name: '🔄 Next Step',
+							value: 'The verify role is now configured. You can run `/config` again to make changes.',
+							inline: false
+						});
+
+					const doneButton = new ActionRowBuilder()
+						.addComponents(
+							new ButtonBuilder()
+								.setCustomId('config_complete')
+								.setLabel('✅ Done')
+								.setStyle(ButtonStyle.Success)
+						);
+
+					await interaction.update({
+						embeds: [successEmbed],
+						components: [doneButton]
+					});
+				} catch (error) {
+					console.error('Error updating verify role:', error);
+					await interaction.update({
+						content: '❌ Failed to save verify role. Please try again.',
+						embeds: [],
+						components: []
+					});
+				}
 			}
 		}
 
@@ -470,97 +484,97 @@ module.exports = {
 			if (interaction.customId === 'verify_log_select') {
 				const selectedChannel = interaction.values[0];
 				
-				const fs = require('fs');
-				const path = require('path');
-				const configPath = path.join(__dirname, '../data/verify_log_channels.json');
-				
-				let config = {};
-				if (fs.existsSync(configPath)) {
-					config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-				}
-				config[interaction.guild.id] = selectedChannel;
-				
-				const dataDir = path.dirname(configPath);
-				if (!fs.existsSync(dataDir)) {
-					fs.mkdirSync(dataDir, { recursive: true });
-				}
-				fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-
-				// Show completion message with option to configure feedback channel
-				const completionEmbed = new EmbedBuilder()
-					.setTitle('✅ Verify Log Channel Configured')
-					.setDescription(`Verify log channel has been set to <#${selectedChannel}>`)
-					.setColor(0x00FF99)
-					.addFields({
-						name: '🔄 Next Step',
-						value: 'Would you like to configure the feedback channel as well?',
-						inline: false
-					});
-
-				const nextButton = new ActionRowBuilder()
-					.addComponents(
-						new ButtonBuilder()
-							.setCustomId('configure_feedback')
-							.setLabel('💬 Configure Feedback Channel')
-							.setStyle(ButtonStyle.Secondary),
-						new ButtonBuilder()
-							.setCustomId('config_complete')
-							.setLabel('✅ Done')
-							.setStyle(ButtonStyle.Success)
+				try {
+					// Update verify channel in database
+					const { query } = require('../config/database-multi-guild');
+					await query(
+						`UPDATE guilds SET verify_channel_id = ? WHERE guild_id = ?`,
+						[selectedChannel, interaction.guild.id]
 					);
 
-				await interaction.update({
-					embeds: [completionEmbed],
-					components: [nextButton]
-				});
+					// Show completion message with option to configure feedback channel
+					const completionEmbed = new EmbedBuilder()
+						.setTitle('✅ Verify Log Channel Configured')
+						.setDescription(`Verify log channel has been set to <#${selectedChannel}>`)
+						.setColor(0x00FF99)
+						.addFields({
+							name: '🔄 Next Step',
+							value: 'Would you like to configure the feedback channel as well?',
+							inline: false
+						});
+
+					const nextButton = new ActionRowBuilder()
+						.addComponents(
+							new ButtonBuilder()
+								.setCustomId('configure_feedback')
+								.setLabel('💬 Configure Feedback Channel')
+								.setStyle(ButtonStyle.Secondary),
+							new ButtonBuilder()
+								.setCustomId('config_complete')
+								.setLabel('✅ Done')
+								.setStyle(ButtonStyle.Success)
+						);
+
+					await interaction.update({
+						embeds: [completionEmbed],
+						components: [nextButton]
+					});
+				} catch (error) {
+					console.error('Error updating verify channel:', error);
+					await interaction.update({
+						content: '❌ Failed to save verify channel. Please try again.',
+						embeds: [],
+						components: []
+					});
+				}
 			}
 
 			if (interaction.customId === 'feedback_channel_select') {
 				const selectedChannel = interaction.values[0];
 				
-				const fs = require('fs');
-				const path = require('path');
-				const configPath = path.join(__dirname, '../data/feedback_channels.json');
-				
-				let config = {};
-				if (fs.existsSync(configPath)) {
-					config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-				}
-				config[interaction.guild.id] = selectedChannel;
-				
-				const dataDir = path.dirname(configPath);
-				if (!fs.existsSync(dataDir)) {
-					fs.mkdirSync(dataDir, { recursive: true });
-				}
-				fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-
-				// Show completion message with option to configure verify log
-				const completionEmbed = new EmbedBuilder()
-					.setTitle('✅ Feedback Channel Configured')
-					.setDescription(`Feedback channel has been set to <#${selectedChannel}>`)
-					.setColor(0x00FF99)
-					.addFields({
-						name: '🔄 Next Step',
-						value: 'Would you like to configure the verify log channel as well?',
-						inline: false
-					});
-
-				const nextButton = new ActionRowBuilder()
-					.addComponents(
-						new ButtonBuilder()
-							.setCustomId('configure_verify_log')
-							.setLabel('📝 Configure Verify Log')
-							.setStyle(ButtonStyle.Secondary),
-						new ButtonBuilder()
-							.setCustomId('config_complete')
-							.setLabel('✅ Done')
-							.setStyle(ButtonStyle.Success)
+				try {
+					// Update feedback channel in database
+					const { query } = require('../config/database-multi-guild');
+					await query(
+						`UPDATE guilds SET feedback_channel_id = ? WHERE guild_id = ?`,
+						[selectedChannel, interaction.guild.id]
 					);
 
-				await interaction.update({
-					embeds: [completionEmbed],
-					components: [nextButton]
-				});
+					// Show completion message with option to configure verify log
+					const completionEmbed = new EmbedBuilder()
+						.setTitle('✅ Feedback Channel Configured')
+						.setDescription(`Feedback channel has been set to <#${selectedChannel}>`)
+						.setColor(0x00FF99)
+						.addFields({
+							name: '🔄 Next Step',
+							value: 'Would you like to configure the verify log channel as well?',
+							inline: false
+						});
+
+					const nextButton = new ActionRowBuilder()
+						.addComponents(
+							new ButtonBuilder()
+								.setCustomId('configure_verify_log')
+								.setLabel('📝 Configure Verify Log')
+								.setStyle(ButtonStyle.Secondary),
+							new ButtonBuilder()
+								.setCustomId('config_complete')
+								.setLabel('✅ Done')
+								.setStyle(ButtonStyle.Success)
+						);
+
+					await interaction.update({
+						embeds: [completionEmbed],
+						components: [nextButton]
+					});
+				} catch (error) {
+					console.error('Error updating feedback channel:', error);
+					await interaction.update({
+						content: '❌ Failed to save feedback channel. Please try again.',
+						embeds: [],
+						components: []
+					});
+				}
 			}
 		}
 

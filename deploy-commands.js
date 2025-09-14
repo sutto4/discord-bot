@@ -27,7 +27,7 @@ for (const file of commandFiles) {
 	}
 
 	// Check if this is a ServerMate management command
-	if (file === 'setdmreply.js') {
+	if (file === 'setdmreply.js' || file === 'setup.js') {
 		managementCommands.push(command.data.toJSON());
 		console.log(`🔧 Added to management commands: ${file}`);
 	} else {

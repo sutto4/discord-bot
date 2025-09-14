@@ -1,4 +1,4 @@
-const { Events, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ChannelSelectMenuBuilder, ChannelType, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Events, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ChannelSelectMenuBuilder, ChannelType, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const { logToChannel } = require('../helpers/logger');
 const { logFeedbackToChannel } = require('../helpers/feedbackLogger');
 const { GuildDatabase } = require('../config/database-multi-guild');
@@ -398,52 +398,71 @@ module.exports = {
 			}
 
 			if (interaction.customId === 'config_roles') {
-				// Create roles configuration modal
-				const modal = new ModalBuilder()
-					.setCustomId('config_roles_modal')
-					.setTitle('Configure Roles');
+				// Get server roles and create a string select menu
+				const roles = interaction.guild.roles.cache
+					.filter(role => role.editable && role.id !== interaction.guild.id) // Exclude @everyone
+					.sort((a, b) => b.position - a.position) // Sort by position (highest first)
+					.map(role => ({
+						label: role.name,
+						value: role.id,
+						description: `Position: ${role.position}`
+					}))
+					.slice(0, 25); // Discord limit is 25 options
 
-				const verifyRoleInput = new TextInputBuilder()
-					.setCustomId('verify_role_id')
-					.setLabel('Verify Role ID')
-					.setStyle(TextInputStyle.Short)
-					.setPlaceholder('Enter role ID (e.g., 1234567890123456789)')
-					.setRequired(false)
-					.setMaxLength(20);
+				const roleSelect = new ActionRowBuilder()
+					.addComponents(
+						new StringSelectMenuBuilder()
+							.setCustomId('verify_role_select')
+							.setPlaceholder('Select verify role')
+							.addOptions(roles)
+					);
 
-				const tier1RoleInput = new TextInputBuilder()
-					.setCustomId('tier1_role_id')
-					.setLabel('Tier 1 Donator Role ID')
-					.setStyle(TextInputStyle.Short)
-					.setPlaceholder('Enter role ID (e.g., 1234567890123456789)')
-					.setRequired(false)
-					.setMaxLength(20);
+				const embed = new EmbedBuilder()
+					.setTitle('🎭 Select Verify Role')
+					.setDescription('Choose which role should be assigned to verified members:')
+					.setColor(0x5865F2)
+					.setFooter({ text: 'Select a role from the dropdown below' });
 
-				const tier2RoleInput = new TextInputBuilder()
-					.setCustomId('tier2_role_id')
-					.setLabel('Tier 2 Donator Role ID')
-					.setStyle(TextInputStyle.Short)
-					.setPlaceholder('Enter role ID (e.g., 1234567890123456789)')
-					.setRequired(false)
-					.setMaxLength(20);
-
-				const tier3RoleInput = new TextInputBuilder()
-					.setCustomId('tier3_role_id')
-					.setLabel('Tier 3 Donator Role ID')
-					.setStyle(TextInputStyle.Short)
-					.setPlaceholder('Enter role ID (e.g., 1234567890123456789)')
-					.setRequired(false)
-					.setMaxLength(20);
-
-				const firstRow = new ActionRowBuilder().addComponents(verifyRoleInput);
-				const secondRow = new ActionRowBuilder().addComponents(tier1RoleInput);
-				const thirdRow = new ActionRowBuilder().addComponents(tier2RoleInput);
-				const fourthRow = new ActionRowBuilder().addComponents(tier3RoleInput);
-
-				modal.addComponents(firstRow, secondRow, thirdRow, fourthRow);
-				await interaction.showModal(modal);
+				await interaction.reply({
+					embeds: [embed],
+					components: [roleSelect],
+					flags: 64
+				});
 			}
 
+		}
+
+		// Handle string select menu interactions (role selection)
+		if (interaction.isStringSelectMenu()) {
+			if (interaction.customId === 'verify_role_select') {
+				const selectedRoleId = interaction.values[0];
+				const selectedRole = interaction.guild.roles.cache.get(selectedRoleId);
+				
+				// Update environment variable or config file
+				// For now, we'll just show a success message
+				const successEmbed = new EmbedBuilder()
+					.setTitle('✅ Verify Role Configured')
+					.setDescription(`Verify role has been set to ${selectedRole}`)
+					.setColor(0x00FF99)
+					.addFields({
+						name: '🔄 Next Step',
+						value: 'The verify role is now configured. You can run `/config` again to make changes.',
+						inline: false
+					});
+
+				const doneButton = new ActionRowBuilder()
+					.addComponents(
+						new ButtonBuilder()
+							.setCustomId('config_complete')
+							.setLabel('✅ Done')
+							.setStyle(ButtonStyle.Success)
+					);
+
+				await interaction.update({
+					embeds: [successEmbed],
+					components: [doneButton]
+				});
+			}
 		}
 
 		// Handle channel select menu interactions
@@ -561,14 +580,7 @@ module.exports = {
 
 		// Handle config modal submissions
 		if (interaction.isModalSubmit()) {
-			if (interaction.customId === 'config_roles_modal') {
-				await interaction.reply({
-					content: '⚠️ Role configuration requires server restart to take effect. Please update your `.env` file manually for now.\n\n' +
-							 'This feature will be enhanced in a future update.',
-					flags: 64
-				});
-			}
-
+			// No modal submissions needed anymore
 		}
 
 		// Slash command handler

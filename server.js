@@ -283,7 +283,7 @@ module.exports = function startServer(client) {
           `INSERT INTO guild_commands (guild_id, command_name, feature_key, enabled)
            VALUES (?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), feature_key = VALUES(feature_key), updated_at = CURRENT_TIMESTAMP`,
-          [guildId, cmd.command_name, cmd.feature_name, cmd.enabled ? 1 : 0]
+          [guildId, cmd.command_name, cmd.feature_key, cmd.enabled ? 1 : 0]
         );
         
         console.log(`[BOT-COMMANDS-API] Database result for ${cmd.command_name}:`, result);

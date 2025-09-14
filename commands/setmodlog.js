@@ -31,7 +31,7 @@ async function saveModLogChannel(guildId, channelId) {
 		if (guildRows.length === 0) {
 			// Guild doesn't exist, create it with basic info
 			await connection.execute(
-				'INSERT INTO guilds (guild_id, name, owner_id, premium) VALUES (?, ?, ?, FALSE)',
+				'INSERT INTO guilds (guild_id, guild_name, owner_id, premium) VALUES (?, ?, ?, FALSE)',
 				[guildId, 'Unknown Guild', 'Unknown Owner', false]
 			);
 		}

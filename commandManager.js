@@ -61,6 +61,9 @@ class CommandManager {
         case 'prune':
           await this.handlePrune(interaction);
           break;
+        case 'config':
+          await this.handleConfig(interaction);
+          break;
         default:
           await interaction.reply({ 
             content: 'Unknown command', 
@@ -204,6 +207,12 @@ class CommandManager {
     // Reuse the existing prune command handler
     const pruneCommand = require('./commands/prune');
     await pruneCommand.execute(interaction);
+  }
+
+  async handleConfig(interaction) {
+    // Reuse the existing config command handler
+    const configCommand = require('./commands/config');
+    await configCommand.execute(interaction);
   }
 }
 

@@ -1,5 +1,8 @@
 const mysql = require('mysql2/promise');
 
+// Load environment variables from .env file
+require('dotenv').config();
+
 async function testFeaturesDirect() {
   const connection = await mysql.createConnection({
     host: process.env.APP_DB_HOST || process.env.BOT_DB_HOST || '127.0.0.1',

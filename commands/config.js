@@ -32,8 +32,7 @@ function getCurrentConfig(guildId) {
 	return {
 		verifyLogChannel: verifyLogs[guildId] || 'Not set',
 		feedbackChannel: feedbackChannels[guildId] || 'Not set',
-		verifyRoleId: process.env.VERIFY_ROLE_ID || 'Not set',
-		syncInterval: '720' // Default from bot.js
+		verifyRoleId: process.env.VERIFY_ROLE_ID || 'Not set'
 	};
 }
 
@@ -75,8 +74,8 @@ module.exports = {
 					inline: true
 				},
 				{
-					name: '⏰ Sync Interval',
-					value: `${currentConfig.syncInterval} minutes`,
+					name: '🌐 Web Dashboard',
+					value: `[Open Server Settings](${process.env.CCC_WEB_APP_URL || 'http://localhost:3000'}/guilds/${interaction.guild.id}/settings)`,
 					inline: true
 				},
 				{
@@ -98,10 +97,6 @@ module.exports = {
 				new ButtonBuilder()
 					.setCustomId('config_roles')
 					.setLabel('🎭 Configure Roles')
-					.setStyle(ButtonStyle.Secondary),
-				new ButtonBuilder()
-					.setCustomId('config_sync')
-					.setLabel('⏰ Configure Sync')
 					.setStyle(ButtonStyle.Secondary)
 			);
 

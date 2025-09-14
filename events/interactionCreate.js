@@ -444,24 +444,6 @@ module.exports = {
 				await interaction.showModal(modal);
 			}
 
-			if (interaction.customId === 'config_sync') {
-				// Create sync configuration modal
-				const modal = new ModalBuilder()
-					.setCustomId('config_sync_modal')
-					.setTitle('Configure Sync Settings');
-
-				const syncIntervalInput = new TextInputBuilder()
-					.setCustomId('sync_interval')
-					.setLabel('Sync Interval (minutes)')
-					.setStyle(TextInputStyle.Short)
-					.setPlaceholder('Enter minutes between syncs (e.g., 720 for 12 hours)')
-					.setRequired(false)
-					.setMaxLength(5);
-
-				const firstRow = new ActionRowBuilder().addComponents(syncIntervalInput);
-				modal.addComponents(firstRow);
-				await interaction.showModal(modal);
-			}
 		}
 
 		// Handle channel select menu interactions
@@ -587,13 +569,6 @@ module.exports = {
 				});
 			}
 
-			if (interaction.customId === 'config_sync_modal') {
-				await interaction.reply({
-					content: '⚠️ Sync interval configuration requires server restart to take effect. Please update your `config/bot.js` file manually for now.\n\n' +
-							 'This feature will be enhanced in a future update.',
-					flags: 64
-				});
-			}
 		}
 
 		// Slash command handler

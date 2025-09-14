@@ -27,8 +27,8 @@ function writeConfig(filePath, data) {
 
 async function getCurrentConfig(guildId) {
 	try {
-		const { query } = require('../config/database-multi-guild');
-		const [rows] = await query(
+		const { pool } = require('../config/database-multi-guild');
+		const [rows] = await pool.execute(
 			`SELECT verify_channel_id, feedback_channel_id, verify_role_id FROM guilds WHERE guild_id = ?`,
 			[guildId]
 		);

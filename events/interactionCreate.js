@@ -440,8 +440,8 @@ module.exports = {
 				
 				try {
 					// Update verify role in database
-					const { query } = require('../config/database-multi-guild');
-					await query(
+					const { pool } = require('../config/database-multi-guild');
+					await pool.execute(
 						`UPDATE guilds SET verify_role_id = ? WHERE guild_id = ?`,
 						[selectedRoleId, interaction.guild.id]
 					);
@@ -486,8 +486,8 @@ module.exports = {
 				
 				try {
 					// Update verify channel in database
-					const { query } = require('../config/database-multi-guild');
-					await query(
+					const { pool } = require('../config/database-multi-guild');
+					await pool.execute(
 						`UPDATE guilds SET verify_channel_id = ? WHERE guild_id = ?`,
 						[selectedChannel, interaction.guild.id]
 					);
@@ -534,8 +534,8 @@ module.exports = {
 				
 				try {
 					// Update feedback channel in database
-					const { query } = require('../config/database-multi-guild');
-					await query(
+					const { pool } = require('../config/database-multi-guild');
+					await pool.execute(
 						`UPDATE guilds SET feedback_channel_id = ? WHERE guild_id = ?`,
 						[selectedChannel, interaction.guild.id]
 					);

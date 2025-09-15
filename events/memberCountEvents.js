@@ -113,11 +113,13 @@ async function startupMemberCountSync(client) {
     const placeholders = botGuildIds.map(() => '?').join(',');
     
     const [staleGuilds] = await pool.execute(
-      `SELECT guild_id, guild_name, member_count, member_count_updated_at 
+      `SELECT guild_id, guild_name, member_count, member_count_updated_at, icon_synced_at 
        FROM guilds 
        WHERE guild_id IN (${placeholders})
          AND (member_count_updated_at < DATE_SUB(NOW(), INTERVAL 1 HOUR) 
-              OR member_count_updated_at IS NULL)
+              OR member_count_updated_at IS NULL
+              OR icon_synced_at IS NULL
+              OR icon_synced_at < DATE_SUB(NOW(), INTERVAL 24 HOUR))
          AND (status = 'active' OR status IS NULL)`,
       botGuildIds
     );
@@ -136,9 +138,14 @@ async function startupMemberCountSync(client) {
         const currentCount = guild.memberCount;
         const dbCount = dbGuild.member_count;
         
-        if (currentCount !== dbCount) {
-          await updateMemberCount(guild.id, currentCount, 'Startup reconciliation');
-          console.log(`[MEMBER-COUNT] 🔄 Reconciled ${dbGuild.guild_name}: ${dbCount} → ${currentCount}`);
+        const needsIconSync = !dbGuild.icon_synced_at;
+        
+        if (currentCount !== dbCount || needsIconSync) {
+          const reason = needsIconSync 
+            ? `Startup reconciliation: ${dbCount} → ${currentCount} + icon sync`
+            : `Startup reconciliation: ${dbCount} → ${currentCount}`;
+          await syncMemberCountForGuild(guild, reason);
+          console.log(`[MEMBER-COUNT] 🔄 Reconciled ${dbGuild.guild_name}: ${dbCount} → ${currentCount}${needsIconSync ? ' + icon' : ''}`);
           reconciledCount++;
         } else {
           console.log(`[MEMBER-COUNT] ✅ ${dbGuild.guild_name} already up to date (${currentCount} members)`);

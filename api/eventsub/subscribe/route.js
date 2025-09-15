@@ -1,5 +1,5 @@
 const express = require('express');
-const { getTwitchUserId, subscribeToStreamOnline, subscribeToStreamOffline } = require('../../events/twitchEventSub');
+const { getTwitchUserId, subscribeToStreamOnline, subscribeToStreamOffline } = require('../../../events/twitchEventSub');
 
 /**
  * API endpoint to manually subscribe a creator to EventSub

@@ -24,11 +24,41 @@ async function updateMemberCount(guildId, memberCount, reason = 'Event update') 
   }
 }
 
+async function updateGuildInfo(guildId, guildInfo) {
+  try {
+    const [result] = await pool.execute(
+      `UPDATE guilds SET 
+         name = ?, 
+         icon_hash = ?, 
+         icon_url = ?, 
+         icon_synced_at = ?, 
+         updated_at = NOW() 
+       WHERE guild_id = ?`,
+      [guildInfo.name, guildInfo.icon_hash, guildInfo.icon_url, guildInfo.icon_synced_at, guildId]
+    );
+    
+    if (result.affectedRows > 0) {
+      console.log(`[GUILD-SYNC] ✅ Updated guild info for ${guildInfo.name} (${guildId})`);
+    }
+  } catch (error) {
+    console.error(`[GUILD-SYNC] ❌ Error updating guild info for ${guildId}:`, error);
+  }
+}
+
 async function syncMemberCountForGuild(guild, reason = 'Manual sync') {
   try {
     // Get accurate member count from Discord
     const actualMemberCount = guild.memberCount;
     await updateMemberCount(guild.id, actualMemberCount, reason);
+    
+    // Also sync guild icon and name while we're here
+    await updateGuildInfo(guild.id, {
+      name: guild.name,
+      icon_hash: guild.icon,
+      icon_url: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=64` : null,
+      icon_synced_at: new Date()
+    });
+    
     return actualMemberCount;
   } catch (error) {
     console.error(`[MEMBER-COUNT] ❌ Error syncing guild ${guild.id}:`, error);

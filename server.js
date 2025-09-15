@@ -11,6 +11,9 @@ module.exports = function startServer(client) {
   const PORT = process.env.PORT || 3001;
 
   app.use(express.json());
+  
+  // Middleware for raw body parsing (needed for Twitch webhook verification)
+  app.use('/webhook/twitch', express.raw({type: 'application/json'}));
 
   // Make Discord client available to all routes
   app.use((req, res, next) => {
@@ -20,6 +23,19 @@ module.exports = function startServer(client) {
   
   // Also store client in app for routes that need it
   app.set('client', client);
+  
+  // Twitch EventSub webhook endpoint
+  const { processWebhookEvent } = require('./events/twitchEventSub');
+  
+  app.post('/webhook/twitch', async (req, res) => {
+    try {
+      const result = await processWebhookEvent(client, req.headers, req.body);
+      res.status(result.status).send(result.message);
+    } catch (error) {
+      console.error('[WEBHOOK] Twitch EventSub error:', error);
+      res.status(500).send('Internal Server Error');
+    }
+  });
 
   // CORS: your Next app proxies to /api, but this is safe here
   app.use((req, res, next) => {
@@ -57,6 +73,9 @@ module.exports = function startServer(client) {
       res.status(500).json({ error: 'Sync failed', details: error.message });
     }
   });
+  
+  // EventSub subscription management
+  app.post('/api/eventsub/subscribe', require('./api/eventsub/subscribe/route'));
 
   // Command server endpoints
   app.get("/api/commands/health", (_req, res) => {

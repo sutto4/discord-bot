@@ -75,11 +75,13 @@ client.once('ready', async () => {
 	const minutes = 720; // Change this to however often you want
 	setInterval(() => syncDonators(client), minutes * 60 * 1000);
 	
-	// Creator alerts processing on startup + interval
-	await processCreatorAlerts(client); // Run once on startup
+	// Initialize Twitch EventSub (replaces polling-based creator alerts)
+	const { subscribeAllExistingAlerts } = require('../events/twitchEventSub');
+	await subscribeAllExistingAlerts();
 	
-	const creatorAlertsMinutes = parseInt(process.env.CREATOR_ALERTS_POLL_SECONDS || '60') / 60; // Convert seconds to minutes
-	setInterval(() => processCreatorAlerts(client), creatorAlertsMinutes * 60 * 1000);
+	// Legacy creator alerts polling (disabled - now using EventSub)
+	// const creatorAlertsMinutes = parseInt(process.env.CREATOR_ALERTS_POLL_SECONDS || '60') / 60;
+	// setInterval(() => processCreatorAlerts(client), creatorAlertsMinutes * 60 * 1000);
 	
 	// Bot customization sync on startup + interval
 	await applyBotCustomizationForAllGuilds(client); // Run once on startup

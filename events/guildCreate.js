@@ -174,7 +174,7 @@ module.exports = {
 						fields: [
 							{
 								name: '🚀 Getting Started',
-								value: '• Visit the [web dashboard](https://servermate.gg) to configure your server\n• Join our [support Discord](https://discord.gg/pmvYxEGe4j) for help and updates',
+								value: '• Visit the [web dashboard](https://servermate.gg/guilds/${guild.id}/settings) to configure your server or run `/config` to get started.\n• Join our [support Discord](https://discord.gg/pmvYxEGe4j) for help and updates',
 								inline: false
 							},
 							{
@@ -211,8 +211,8 @@ module.exports = {
 						description: `**🚧 BETA RELEASE** - This is a beta version subject to testing and ongoing development.\n\nServerMate has been added to **${guild.name}**! As the server owner, you have full access to all features.`,
 						fields: [
 							{
-								name: '🔧 Next Steps',
-								value: '• Visit the [web dashboard](https://servermate.gg) to configure your server\n• Set up moderation commands and permissions\n• Configure verification system if needed',
+								name: '🚀 Getting Started',
+								value: '• Visit the [web dashboard](https://servermate.gg/guilds/${guild.id}/settings) to configure your server or run `/config` to get started.\n• Join our [support Discord](https://discord.gg/pmvYxEGe4j) for help and updates',
 								inline: false
 							},
 							{

@@ -66,18 +66,33 @@ async function startupMemberCountSync(client) {
   console.log('[MEMBER-COUNT] 🚀 Running startup member count reconciliation...');
   
   try {
-    // Get guilds that haven't been updated recently (more than 1 hour ago)
+    // Get only guilds that the bot is actually in and have stale data
+    const botGuildIds = Array.from(client.guilds.cache.keys());
+    
+    if (botGuildIds.length === 0) {
+      console.log('[MEMBER-COUNT] Bot is not in any guilds, skipping reconciliation');
+      return;
+    }
+    
+    console.log(`[MEMBER-COUNT] Bot is in ${botGuildIds.length} guilds, checking for stale data...`);
+    
+    // Create placeholders for the IN clause
+    const placeholders = botGuildIds.map(() => '?').join(',');
+    
     const [staleGuilds] = await pool.execute(
       `SELECT guild_id, guild_name, member_count, member_count_updated_at 
        FROM guilds 
-       WHERE member_count_updated_at < DATE_SUB(NOW(), INTERVAL 1 HOUR) 
-          OR member_count_updated_at IS NULL`
+       WHERE guild_id IN (${placeholders})
+         AND (member_count_updated_at < DATE_SUB(NOW(), INTERVAL 1 HOUR) 
+              OR member_count_updated_at IS NULL)
+         AND (status = 'active' OR status IS NULL)`,
+      botGuildIds
     );
     
-    console.log(`[MEMBER-COUNT] Found ${staleGuilds.length} guilds with stale member counts`);
+    console.log(`[MEMBER-COUNT] Found ${staleGuilds.length} active guilds with stale member counts`);
     
     if (staleGuilds.length === 0) {
-      console.log('[MEMBER-COUNT] All guild member counts are up to date');
+      console.log('[MEMBER-COUNT] All active guild member counts are up to date');
       return;
     }
     
@@ -92,16 +107,19 @@ async function startupMemberCountSync(client) {
           await updateMemberCount(guild.id, currentCount, 'Startup reconciliation');
           console.log(`[MEMBER-COUNT] 🔄 Reconciled ${dbGuild.guild_name}: ${dbCount} → ${currentCount}`);
           reconciledCount++;
+        } else {
+          console.log(`[MEMBER-COUNT] ✅ ${dbGuild.guild_name} already up to date (${currentCount} members)`);
         }
       } else {
-        console.log(`[MEMBER-COUNT] ⚠️ Guild ${dbGuild.guild_name} (${dbGuild.guild_id}) not found in bot cache`);
+        // This shouldn't happen since we filtered by bot guild IDs, but just in case
+        console.log(`[MEMBER-COUNT] ⚠️ Guild ${dbGuild.guild_name} (${dbGuild.guild_id}) unexpectedly not in bot cache`);
       }
       
       // Small delay to avoid overwhelming Discord API
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 25));
     }
     
-    console.log(`[MEMBER-COUNT] ✅ Startup reconciliation completed: ${reconciledCount} guilds updated`);
+    console.log(`[MEMBER-COUNT] ✅ Startup reconciliation completed: ${reconciledCount}/${staleGuilds.length} guilds updated`);
   } catch (error) {
     console.error('[MEMBER-COUNT] ❌ Error during startup reconciliation:', error);
   }

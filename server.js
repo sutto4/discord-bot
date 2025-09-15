@@ -389,7 +389,7 @@ module.exports = function startServer(client) {
   // Get all guilds where the bot is installed
   app.get("/api/guilds", async (_req, res) => {
     try {
-      var guildsResult = await appDb.query("SELECT guild_id, guild_name, status FROM guilds WHERE status = 'active'");
+      var guildsResult = await appDb.query("SELECT guild_id, guild_name, status, icon_url, icon_hash, member_count FROM guilds WHERE status = 'active'");
       var rows = guildsResult[0];
       
       // Get detailed guild info including member and role counts
@@ -429,9 +429,9 @@ module.exports = function startServer(client) {
             guild_id: row.guild_id,
             guild_name: row.guild_name,
             status: 'active',
-            memberCount: guild.memberCount || 0,
+            memberCount: row.member_count || guild.memberCount || 0,
             roleCount: guild.roles.cache.size || 0,
-            iconUrl: guild.iconURL ? guild.iconURL({ size: 128, extension: "png" }) : null,
+            iconUrl: row.icon_url || (guild.iconURL ? guild.iconURL({ size: 128, extension: "png" }) : null),
             createdAt: guild.createdAt ? guild.createdAt.toISOString() : null
           });
         } catch (err) {

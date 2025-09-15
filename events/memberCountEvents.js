@@ -28,7 +28,7 @@ async function updateGuildInfo(guildId, guildInfo) {
   try {
     const [result] = await pool.execute(
       `UPDATE guilds SET 
-         name = ?, 
+         guild_name = ?, 
          icon_hash = ?, 
          icon_url = ?, 
          icon_synced_at = ?, 
@@ -52,12 +52,15 @@ async function syncMemberCountForGuild(guild, reason = 'Manual sync') {
     await updateMemberCount(guild.id, actualMemberCount, reason);
     
     // Also sync guild icon and name while we're here
-    await updateGuildInfo(guild.id, {
+    const guildInfo = {
       name: guild.name,
       icon_hash: guild.icon,
       icon_url: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=64` : null,
       icon_synced_at: new Date()
-    });
+    };
+    
+    console.log(`[GUILD-SYNC] 🎨 Syncing icon for ${guild.name}: icon_hash=${guild.icon}, icon_url=${guildInfo.icon_url}`);
+    await updateGuildInfo(guild.id, guildInfo);
     
     return actualMemberCount;
   } catch (error) {

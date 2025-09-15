@@ -210,7 +210,7 @@ async function handleStreamOnline(client, eventData) {
         
         // Get all creator alerts for this Twitch user
         const [alerts] = await pool.execute(
-            `SELECT * FROM creator_alerts 
+            `SELECT * FROM creator_alert_rules 
              WHERE platform = 'twitch' AND creator = ? AND enabled = 1`,
             [streamerName]
         );
@@ -318,7 +318,7 @@ async function subscribeAllExistingAlerts() {
         console.log('[TWITCH-EVENTSUB] 🔄 Subscribing existing creator alerts to EventSub...');
         
         const [alerts] = await pool.execute(
-            `SELECT DISTINCT creator FROM creator_alerts 
+            `SELECT DISTINCT creator FROM creator_alert_rules 
              WHERE platform = 'twitch' AND enabled = 1`
         );
         

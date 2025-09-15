@@ -45,12 +45,13 @@ module.exports = function startServer(client) {
     }
   });
 
-  // Manual sync endpoint for testing
+  // Manual sync endpoint for testing (now uses event-driven system)
   app.post("/api/sync-member-counts", async (_req, res) => {
     try {
       console.log('🔄 Manual member count sync triggered via API...');
-      await syncMemberCounts();
-      res.json({ success: true, message: 'Member count sync completed' });
+      const { syncAllGuildCounts } = require('./events/memberCountEvents');
+      const updatedCount = await syncAllGuildCounts(client, 'Manual API trigger');
+      res.json({ success: true, message: `Member count sync completed for ${updatedCount} guilds` });
     } catch (error) {
       console.error('❌ Manual sync failed:', error);
       res.status(500).json({ error: 'Sync failed', details: error.message });
@@ -1496,76 +1497,9 @@ module.exports = function startServer(client) {
     }
   };
 
-  // Periodic member count sync job (runs every 6 hours)
-  const syncMemberCounts = async () => {
-    try {
-      console.log('🔄 Starting periodic member count sync...');
-      
-      // Only sync guilds that the bot is actually in
-      const botGuildIds = Array.from(client.guilds.cache.keys());
-      console.log(`🤖 Bot is in ${botGuildIds.length} guilds:`, botGuildIds);
-      
-      if (botGuildIds.length === 0) {
-        console.log('📊 No guilds to sync - bot is not in any servers');
-        return;
-      }
-      
-      // Get guilds from database that the bot is actually in
-      const placeholders = botGuildIds.map(() => '?').join(',');
-      const [rows] = await appDb.query(
-        `SELECT guild_id, guild_name, member_count FROM guilds WHERE guild_id IN (${placeholders}) AND (status = 'active' OR status IS NULL)`,
-        botGuildIds
-      );
+  // Legacy sync function (now handled by events, kept for reference)
+  // Member count is now updated in real-time via Discord events in memberCountEvents.js
 
-      console.log(`📊 Found ${rows.length} guilds in database that bot is in`);
-      let updatedCount = 0;
-
-      for (const row of rows) {
-        try {
-          const guild = await client.guilds.fetch(row.guild_id);
-          const currentCount = guild.memberCount || 0;
-          const previousCount = row.member_count || 0;
-
-          // Only update if the count has changed
-          if (currentCount !== previousCount) {
-            await appDb.query(
-              "UPDATE guilds SET member_count = ?, member_count_updated_at = NOW() WHERE guild_id = ?",
-              [currentCount, row.guild_id]
-            );
-            console.log(`📈 Updated ${row.guild_name}: ${previousCount} → ${currentCount} members`);
-            updatedCount++;
-          }
-        } catch (err) {
-          if (err.code === 10004) { // Unknown Guild
-            console.log(`🗑️ Guild ${row.guild_name} (${row.guild_id}) no longer exists during sync, will be cleaned up next cleanup cycle`);
-            try {
-              await appDb.query("UPDATE guilds SET status = 'removed', updated_at = NOW() WHERE guild_id = ?", [row.guild_id]);
-            } catch (dbError) {
-              console.warn(`⚠️ Could not mark ${row.guild_name} as removed during sync:`, dbError.message);
-            }
-          } else if (err.code === 50013) {
-            // Missing Permissions - server-specific issue
-            console.log(`🔒 Guild ${row.guild_name} (${row.guild_id}) - missing permissions during sync`);
-            try {
-              await appDb.query("UPDATE guilds SET status = 'inactive', updated_at = NOW() WHERE guild_id = ?", [row.guild_id]);
-            } catch (dbError) {
-              console.warn(`⚠️ Could not mark ${row.guild_name} as inactive during sync:`, dbError.message);
-            }
-          } else {
-            // Global issues - don't change status, just log
-            console.warn(`⚠️ Global issue affecting guild ${row.guild_name} during sync:`, err.message);
-          }
-        }
-      }
-
-      console.log(`✅ Periodic sync completed: Updated ${updatedCount}/${rows.length} guilds`);
-    } catch (error) {
-      console.error('❌ Periodic member count sync failed:', error);
-    }
-  };
-
-  // Start periodic sync (every 6 hours = 6 * 60 * 60 * 1000 ms)
-  setInterval(syncMemberCounts, 6 * 60 * 60 * 1000);
   
   // Start periodic cleanup (every 12 hours = 12 * 60 * 60 * 1000 ms)
   setInterval(cleanupRemovedGuilds, 12 * 60 * 60 * 1000);
@@ -1686,8 +1620,7 @@ module.exports = function startServer(client) {
     }
   });
 
-  // Run initial sync after 30 seconds (to let bot fully connect)
-  setTimeout(syncMemberCounts, 30000);
+  // Note: Member count sync is now event-driven via memberCountEvents.js
   
   // Run initial cleanup after 45 seconds (to let bot fully connect)
   setTimeout(cleanupRemovedGuilds, 45000);
@@ -1739,6 +1672,7 @@ module.exports = function startServer(client) {
 
   // Check for command updates every 5 seconds
   setInterval(processCommandUpdates, 5000);
+
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`🚨🚨🚨 API SERVER LISTENING ON PORT ${PORT} 🚨🚨🚨`);

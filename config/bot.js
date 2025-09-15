@@ -5,6 +5,9 @@ const path = require('node:path');
 const syncDonators = require('../jobs/syncDonators');
 const { processCreatorAlerts } = require('../jobs/creatorAlerts');
 const { applyBotCustomizationForAllGuilds } = require('../jobs/botCustomization');
+const { setupAccessControlEvents } = require('../events/accessControlEvents');
+const { startupAccessCleanup } = require('../jobs/startupAccessCleanup');
+const { setupMemberCountEvents, startupMemberCountSync } = require('../events/memberCountEvents');
 
 // Create Discord client with required intents
 const client = new Client({
@@ -56,6 +59,16 @@ client.once('ready', async () => {
 
 	// Make client available globally for webhook server
 	global.client = client;
+
+	// Setup access control event handlers
+	setupAccessControlEvents(client);
+
+	// Setup member count event handlers
+	setupMemberCountEvents(client);
+
+	// Run startup cleanup and reconciliation
+	await startupAccessCleanup(client);
+	await startupMemberCountSync(client);
 
 	await syncDonators(client); // Run once on startup
 

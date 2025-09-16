@@ -18,7 +18,7 @@ function buildUrl(path) {
   return `${base}${path}`;
 }
 
-async function postSystemEvent(path, body)() {
+async function postSystemEvent(path, body) {
   try {
     const f = await ensureFetch();
     const url = buildUrl(path);

@@ -1,5 +1,6 @@
 const { GuildDatabase } = require('../config/database-multi-guild');
 const { appDb } = require('../config/database');
+const { postSystemEvent } = require('../utils/systemEvents');
 
 module.exports = {
 	name: 'guildCreate',
@@ -96,6 +97,14 @@ module.exports = {
 				ownerId: guild.ownerId,
 				botInviterId: botInviterId,
 				joinedAt: new Date().toISOString()
+			});
+
+			// System event: guild added (fire-and-forget)
+			postSystemEvent('/system-events/guild-added', {
+				guildId: guild.id,
+				guildName: guild.name,
+				actorId: botInviterId || guild.ownerId,
+				actorName: undefined,
 			});
 
 			// Mark server as newly added for sound notification

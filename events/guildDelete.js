@@ -1,4 +1,5 @@
 const { GuildDatabase } = require('../config/database-multi-guild');
+const { postSystemEvent } = require('../utils/systemEvents');
 
 module.exports = {
 	name: 'guildDelete',
@@ -37,6 +38,14 @@ module.exports = {
 				memberCount: guild.memberCount,
 				leftAt: new Date().toISOString(),
 				action: 'Status updated to "inactive", features cleaned up'
+			});
+
+			// System event: guild removed (fire-and-forget)
+			postSystemEvent('/system-events/guild-removed', {
+				guildId: guild.id,
+				guildName: guild.name,
+				actorId: guild.ownerId,
+				actorName: undefined,
 			});
 			
 		} catch (error) {

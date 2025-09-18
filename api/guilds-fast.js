@@ -59,48 +59,4 @@ async function fetchGuildDataFast(guildIds, client) {
   return results;
 }
 
-// Fast guilds endpoint
-app.get("/api/guilds-fast", async (req, res) => {
-  const startTime = performance.now();
-  console.log(`[FAST-API] 🚀 Fast guilds endpoint started`);
-  
-  try {
-    // Check cache first
-    const cacheKey = 'guilds-fast';
-    const cached = guildCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
-      console.log(`[FAST-API] ✅ Cache hit - returning cached data`);
-      return res.json(cached.data);
-    }
-    
-    // Get guild IDs from database
-    const guildsResult = await appDb.query("SELECT guild_id, guild_name, status, icon_url, icon_hash, member_count FROM guilds WHERE status = 'active'");
-    const rows = guildsResult[0];
-    
-    if (rows.length === 0) {
-      console.log(`[FAST-API] ⚠️ No active guilds found`);
-      return res.json([]);
-    }
-    
-    const guildIds = rows.map(row => row.guild_id);
-    
-    // Fetch guild data in parallel
-    const guilds = await fetchGuildDataFast(guildIds, client);
-    
-    // Cache the results
-    guildCache.set(cacheKey, {
-      data: guilds,
-      timestamp: Date.now()
-    });
-    
-    const endTime = performance.now();
-    console.log(`[FAST-API] ✅ Fast endpoint completed in ${(endTime - startTime).toFixed(2)}ms`);
-    
-    res.json(guilds);
-  } catch (error) {
-    console.error(`[FAST-API] ❌ Error:`, error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
 module.exports = { fetchGuildDataFast };

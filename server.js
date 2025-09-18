@@ -1,6 +1,7 @@
 // server.js
 const express = require("express");
 const { fivemDb, appDb } = require("./config/database");
+const { performance } = require('perf_hooks');
 
 /**
  * Start the HTTP API that the Next.js app calls.
@@ -387,7 +388,40 @@ module.exports = function startServer(client) {
   });
 
   // Get all guilds where the bot is installed
+  // Import fast guilds functionality
+  const { fetchGuildDataFast } = require('./api/guilds-fast');
+
   app.get("/api/guilds", async (_req, res) => {
+    const startTime = performance.now();
+    console.log(`[PERF] 🚀 Guilds endpoint started`);
+    
+    try {
+      var guildsResult = await appDb.query("SELECT guild_id, guild_name, status, icon_url, icon_hash, member_count FROM guilds WHERE status = 'active'");
+      var rows = guildsResult[0];
+      
+      if (rows.length === 0) {
+        console.log(`[PERF] ⚠️ No active guilds found`);
+        return res.json([]);
+      }
+
+      const guildIds = rows.map(row => row.guild_id);
+      console.log(`[PERF] 🔍 Processing ${guildIds.length} guilds in parallel`);
+
+      // Use fast parallel processing
+      const guilds = await fetchGuildDataFast(guildIds, client);
+
+      const endTime = performance.now();
+      console.log(`[PERF] ✅ Guilds endpoint completed in ${(endTime - startTime).toFixed(2)}ms`);
+
+      res.json(guilds);
+    } catch (err) {
+      console.error(`[PERF] ❌ Error in guilds endpoint:`, err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // Keep original endpoint as fallback
+  app.get("/api/guilds-original", async (_req, res) => {
     try {
       var guildsResult = await appDb.query("SELECT guild_id, guild_name, status, icon_url, icon_hash, member_count FROM guilds WHERE status = 'active'");
       var rows = guildsResult[0];

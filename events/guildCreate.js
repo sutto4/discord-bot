@@ -179,21 +179,21 @@ module.exports = {
 					const welcomeEmbed = {
 						color: 0x00ff00,
 						title: '🎉 Welcome to ServerMate!',
-						description: `**🚧 BETA RELEASE** - This is a beta version subject to testing and ongoing development.\n\nThank you for adding ServerMate to **${guild.name}**! I'm excited to help you manage your server more efficiently.`,
+						description: `**🚧 BETA RELEASE** - This is a beta release and features may change as we continue development.\n\nThank you for adding ServerMate to **${guild.name}**! I'm excited to help you manage your server more efficiently.`,
 						fields: [
 							{
 								name: '🚀 Getting Started',
-								value: '• Visit the [web dashboard](https://servermate.gg/guilds/${guild.id}/settings) to configure your server or run `/config` to get started.\n• Join our [support Discord](https://discord.gg/pmvYxEGe4j) for help and updates',
+								value: '• Visit the [web dashboard](https://servermate.gg/guilds/${guild.id}/settings) or run /config to begin setup.\n• Join our [support Discord](https://discord.gg/pmvYxEGe4j) for help and updates',
 								inline: false
 							},
 							{
-								name: '⚙️ Quick Setup',
-								value: '• Configure moderation commands in your server settings\n• Set up verification system if needed\n• Customize bot permissions and roles',
+								name: '⚙️ Standard Features',
+								value: '• Moderation commands (warn, kick, ban, mute)\n• Verification system\n• Embedded Messages\n• Reaction Roles\n• User & Role Management',
 								inline: false
 							},
 							{
-								name: '💎 Premium Features',
-								value: 'Upgrade to premium for advanced features like:\n• Custom commands\n• Advanced analytics\n• Priority support\n• And much more!',
+								name: '💎 Premium Features - Free for Beta Testers!',
+								value: '• Custom commands\n• Creator Alerts\n• Bot Customisation\n• Multi-Server Management!\n• And more to come!',
 								inline: false
 							}
 						],

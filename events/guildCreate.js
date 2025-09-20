@@ -21,30 +21,33 @@ module.exports = {
 
 			// Set up default features and commands for new servers
 			if (!existingGuild) {
-				console.log(`[GUILD_CREATE] Setting up default features for new server: ${guild.name}`);
+				console.log(`[GUILD_CREATE] Setting up default features and commands for new server: ${guild.name}`);
 
-				// Set default package (free features)
-				const packageSet = await GuildDatabase.setGuildPackage(guild.id, 'free');
-				if (packageSet) {
-					console.log(`[GUILD_CREATE] Default free package set up for ${guild.name}`);
+				// Set default features from default_features table
+				const featuresSet = await GuildDatabase.setGuildFeaturesFromDefaults(guild.id);
+				if (featuresSet) {
+					console.log(`[GUILD_CREATE] Default features set up for ${guild.name}`);
 
-					// Get the enabled features for this guild
-					const enabledFeatures = await GuildDatabase.getGuildFeatures(guild.id);
-					const enabledFeatureNames = Object.keys(enabledFeatures).filter(key => enabledFeatures[key]);
+					// Get default commands from default_commands table
+					const defaultCommands = await GuildDatabase.getDefaultCommands();
+					
+					if (defaultCommands.length > 0) {
+						console.log(`[GUILD_CREATE] Default commands for ${guild.name}:`, defaultCommands);
 
-					console.log(`[GUILD_CREATE] Enabled features for ${guild.name}:`, enabledFeatureNames);
-
-					// Register commands for enabled features
-					if (client.commandManager && enabledFeatureNames.length > 0) {
-						try {
-							const result = await client.commandManager.updateGuildCommands(guild.id, enabledFeatureNames);
-							console.log(`[GUILD_CREATE] Registered ${result.commandsCount} commands for ${guild.name}`);
-						} catch (cmdError) {
-							console.error(`[GUILD_CREATE] Error registering commands for ${guild.name}:`, cmdError);
+						// Register default commands directly
+						if (client.commandManager) {
+							try {
+								const result = await client.commandManager.updateGuildCommands(guild.id, defaultCommands);
+								console.log(`[GUILD_CREATE] Registered ${result.commandsCount} default commands for ${guild.name}`);
+							} catch (cmdError) {
+								console.error(`[GUILD_CREATE] Error registering default commands for ${guild.name}:`, cmdError);
+							}
 						}
+					} else {
+						console.log(`[GUILD_CREATE] No default commands configured for ${guild.name}`);
 					}
 				} else {
-					console.error(`[GUILD_CREATE] Failed to set up default package for ${guild.name}`);
+					console.error(`[GUILD_CREATE] Failed to set up default features for ${guild.name}`);
 				}
 			}
 

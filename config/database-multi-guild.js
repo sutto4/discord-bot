@@ -257,6 +257,60 @@ class GuildDatabase {
         }
     }
 
+    // Set guild features based on default_features table
+    static async setGuildFeaturesFromDefaults(guildId) {
+        try {
+            // Get default features
+            const query = `
+                SELECT feature_key FROM default_features 
+                WHERE enabled_by_default = 1
+            `;
+            
+            const [features] = await pool.execute(query);
+            
+            // First, disable all features for this guild
+            await pool.execute('DELETE FROM guild_features WHERE guild_id = ?', [guildId]);
+            
+            // Then enable default features
+            if (features.length > 0) {
+                const values = features.map(feature => [guildId, feature.feature_key, 1]);
+                const placeholders = values.map(() => '(?, ?, ?)').join(', ');
+                const flatValues = values.flat();
+                
+                await pool.execute(
+                    `INSERT INTO guild_features (guild_id, feature_key, enabled) VALUES ${placeholders}`,
+                    flatValues
+                );
+            }
+            
+            const featureNames = features.map(f => f.feature_key).join(', ');
+            console.log(`[GUILD_DEFAULTS] Guild ${guildId} set with default features: ${featureNames}`);
+            return true;
+        } catch (error) {
+            console.error('Error setting guild features from defaults:', error);
+            return false;
+        }
+    }
+
+    // Get default commands from default_commands table
+    static async getDefaultCommands() {
+        try {
+            const query = `
+                SELECT command_name FROM default_commands 
+                WHERE enabled_by_default = 1
+            `;
+            
+            const [commands] = await pool.execute(query);
+            const commandNames = commands.map(cmd => cmd.command_name);
+            
+            console.log(`[GUILD_DEFAULTS] Retrieved default commands: ${commandNames.join(', ')}`);
+            return commandNames;
+        } catch (error) {
+            console.error('Error getting default commands:', error);
+            return [];
+        }
+    }
+
     // Get guild's current package
     static async getGuildPackage(guildId) {
         try {

@@ -387,6 +387,7 @@ module.exports = function startServer(client) {
     }
   });
 
+
   // Get all guilds where the bot is installed
   // Import fast guilds functionality
   const { fetchGuildDataFast } = require('./api/guilds-fast');

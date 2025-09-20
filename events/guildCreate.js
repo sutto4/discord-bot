@@ -49,6 +49,36 @@ module.exports = {
 				} else {
 					console.error(`[GUILD_CREATE] Failed to set up default features for ${guild.name}`);
 				}
+			} else {
+				// For rejoined servers, set up defaults like a new server (since cleanup removes everything)
+				console.log(`[GUILD_CREATE] Rejoined server ${guild.name} - setting up defaults like new server`);
+
+				// Set default features from default_features table
+				const featuresSet = await GuildDatabase.setGuildFeaturesFromDefaults(guild.id);
+				if (featuresSet) {
+					console.log(`[GUILD_CREATE] Default features set up for rejoined server ${guild.name}`);
+
+					// Get default commands from default_commands table
+					const defaultCommands = await GuildDatabase.getDefaultCommands();
+					
+					if (defaultCommands.length > 0) {
+						console.log(`[GUILD_CREATE] Default commands for rejoined server ${guild.name}:`, defaultCommands);
+
+						// Register default commands directly
+						if (client.commandManager) {
+							try {
+								const result = await client.commandManager.updateGuildCommands(guild.id, defaultCommands);
+								console.log(`[GUILD_CREATE] ✅ Registered ${result.commandsCount} default commands for rejoined server ${guild.name}`);
+							} catch (cmdError) {
+								console.error(`[GUILD_CREATE] Error registering default commands for rejoined server ${guild.name}:`, cmdError);
+							}
+						}
+					} else {
+						console.log(`[GUILD_CREATE] No default commands configured for rejoined server ${guild.name}`);
+					}
+				} else {
+					console.error(`[GUILD_CREATE] Failed to set up default features for rejoined server ${guild.name}`);
+				}
 			}
 
 			// Try to get the bot inviter from audit logs

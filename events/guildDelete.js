@@ -28,6 +28,16 @@ module.exports = {
 				[guild.id]
 			);
 			
+			// Clean up Discord commands when server leaves
+			if (client.commandManager) {
+				try {
+					await client.commandManager.updateGuildCommands(guild.id, []); // Empty array = remove all commands
+					console.log(`[GUILD_DELETE] Removed all commands from ${guild.name}`);
+				} catch (cmdError) {
+					console.error(`[GUILD_DELETE] Error removing commands from ${guild.name}:`, cmdError);
+				}
+			}
+
 			// Clean up other guild-specific tables as needed
 			// You can add more cleanup queries here for other features
 			

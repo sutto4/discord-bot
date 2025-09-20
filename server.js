@@ -387,6 +387,76 @@ module.exports = function startServer(client) {
     }
   });
 
+  // Admin endpoint for bulk updates
+  app.post("/api/admin/bulk-update", async (req, res) => {
+    try {
+      const { type, items, action } = req.body;
+      console.log(`[BOT-BULK] Received bulk ${action} for ${type}:`, items);
+      
+      if (!type || !items || !action) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+      
+      // Get all active guilds
+      const guilds = await GuildDatabase.getAllGuilds();
+      console.log(`[BOT-BULK] Found ${guilds.length} active guilds to update`);
+      
+      let updatedCount = 0;
+      let errorCount = 0;
+      
+      if (type === 'commands') {
+        // Update commands for all guilds
+        for (const guild of guilds) {
+          try {
+            console.log(`[BOT-BULK] Updating commands for guild ${guild.guild_name} (${guild.guild_id})`);
+            
+            if (client.commandManager) {
+              if (action === 'enable') {
+                // Enable the specified commands
+                await client.commandManager.updateGuildCommands(guild.guild_id, items);
+                console.log(`[BOT-BULK] ✅ Enabled ${items.length} commands for ${guild.guild_name}`);
+              } else if (action === 'disable') {
+                // Get current commands and remove the disabled ones
+                const currentCommands = await GuildDatabase.getGuildFeatures(guild.guild_id);
+                const enabledCommands = Object.keys(currentCommands).filter(key => currentCommands[key]);
+                const remainingCommands = enabledCommands.filter(cmd => !items.includes(cmd));
+                await client.commandManager.updateGuildCommands(guild.guild_id, remainingCommands);
+                console.log(`[BOT-BULK] ✅ Disabled ${items.length} commands for ${guild.guild_name}`);
+              }
+              updatedCount++;
+            } else {
+              console.warn(`[BOT-BULK] ⚠️ Command manager not available for ${guild.guild_name}`);
+            }
+          } catch (guildError) {
+            console.error(`[BOT-BULK] ❌ Error updating guild ${guild.guild_name}:`, guildError.message);
+            errorCount++;
+          }
+        }
+      } else if (type === 'features') {
+        // Features are handled by the database updates, just log
+        console.log(`[BOT-BULK] Feature ${action} completed via database for ${guilds.length} guilds`);
+        updatedCount = guilds.length;
+      }
+      
+      console.log(`[BOT-BULK] ✅ Bulk ${action} completed: ${updatedCount} guilds updated, ${errorCount} errors`);
+      
+      res.json({
+        success: true,
+        message: `Bulk ${action} completed for ${updatedCount} guilds`,
+        updated: updatedCount,
+        errors: errorCount,
+        total: guilds.length
+      });
+      
+    } catch (error) {
+      console.error('[BOT-BULK] Error processing bulk update:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to process bulk update',
+        details: error.message
+      });
+    }
+  });
 
   // Get all guilds where the bot is installed
   // Import fast guilds functionality

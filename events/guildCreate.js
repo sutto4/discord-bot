@@ -216,7 +216,7 @@ module.exports = {
 						fields: [
 							{
 								name: '🚀 Getting Started',
-								value: '• Visit the [web dashboard](https://servermate.gg/guilds/${guild.id}/settings) or run /config to begin setup.\n• Join our [support Discord](https://discord.gg/pmvYxEGe4j) for help and updates',
+								value: `• Visit the [web dashboard](https://servermate.gg/guilds/${guild.id}/settings) or run /config to begin setup.\n• Join our [support Discord](https://discord.gg/pmvYxEGe4j) for help and updates`,
 								inline: false
 							},
 							{
@@ -254,7 +254,7 @@ module.exports = {
 						fields: [
 							{
 								name: '🚀 Getting Started',
-								value: '• Visit the [web dashboard](https://servermate.gg/guilds/${guild.id}/settings) to configure your server or run `/config` to get started.\n• Join our [support Discord](https://discord.gg/pmvYxEGe4j) for help and updates',
+								value: `• Visit the [web dashboard](https://servermate.gg/guilds/${guild.id}/settings) to configure your server or run \`/config\` to get started.\n• Join our [support Discord](https://discord.gg/pmvYxEGe4j) for help and updates`,
 								inline: false
 							},
 							{

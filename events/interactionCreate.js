@@ -2,6 +2,7 @@ const { Events, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, Ac
 const { logToChannel } = require('../helpers/logger');
 const { logFeedbackToChannel } = require('../helpers/feedbackLogger');
 const { GuildDatabase } = require('../config/database-multi-guild');
+const { logCommand, logAction } = require('../helpers/systemLogger');
 const fetch = require('node-fetch');
 
 // Command activity reporting to CCC web app
@@ -107,6 +108,15 @@ module.exports = {
 				if (removed.length) parts.push(`Removed: ${removed.join(', ')}`);
 				if (parts.length === 0) parts.push('No changes.');
 				await interaction.editReply({ content: parts.join(' \n') });
+
+				// Log role menu interaction to system logs
+				logAction(
+					interaction.guild,
+					interaction.user,
+					'role_menu_interaction',
+					{ added, removed, menuId: internalId },
+					'success'
+				).catch(() => {});
 				return;
 			} catch (e) {
 				try { await interaction.editReply({ content: 'Failed to update roles.' }); } catch {}
@@ -179,6 +189,15 @@ module.exports = {
 				interaction.guild,
 				`<@${interaction.user.id}> tried to verify: **${success ? 'Success' : 'Failed'}**`
 			);
+
+			// System log for verification action
+			logAction(
+				interaction.guild,
+				interaction.user,
+				'assign_verify_role',
+				{ role: 'Verified' },
+				success ? 'success' : 'failed'
+			).catch(() => {});
 
 			// 📊 Log verification to database
 			await GuildDatabase.logVerification(
@@ -305,12 +324,32 @@ module.exports = {
 					details,
 					contact
 				);
+
+				// System log for feedback submission
+				logAction(
+					interaction.guild,
+					interaction.user,
+					'user_feedback_submitted',
+					{ feedbackType, subject },
+					'success'
+				).catch(() => {});
+
 			} catch (error) {
 				console.error('Error processing feedback:', error);
 				await interaction.reply({
 					content: '❌ There was an error submitting your feedback. Please try again later.',
 					flags: 64
 				});
+
+				// System log for failed feedback submission
+				logAction(
+					interaction.guild,
+					interaction.user,
+					'user_feedback_submitted',
+					{ feedbackType, subject },
+					'failed',
+					error?.message?.slice(0, 500)
+				).catch(() => {});
 			}
 		}
 
@@ -620,11 +659,17 @@ module.exports = {
 
 				// Report command activity to CCC web app
 				await reportCommandActivity(interaction, commandName, startTime, true);
+
+				// Log slash command to system logs
+				logCommand(interaction.guild, interaction.user, `/${commandName}`, interaction.options?.data || []).catch(() => {});
 			} catch (error) {
 				console.error(error);
 
 				// Report failed command activity to CCC web app
 				await reportCommandActivity(interaction, commandName, startTime, false, error.message);
+
+				// Log failed slash command to system logs
+				logCommand(interaction.guild, interaction.user, `/${commandName}`, interaction.options?.data || [], 'failed', error?.message?.slice(0, 500)).catch(() => {});
 
 				await interaction.reply({ content: '❌ Command failed.', flags: 64 });
 			}

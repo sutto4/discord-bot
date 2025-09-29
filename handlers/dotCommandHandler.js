@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('../config/database-multi-guild');
+const { logCommand } = require('../helpers/systemLogger');
 const { Collection } = require('discord.js');
 
 // Load all dotcommands into a collection
@@ -41,8 +42,12 @@ module.exports = async function handleDotCommand(message) {
 
 	try {
 		await command.execute(message, args);
+		// Log success to system logs
+		logCommand(message.guild, message.author, `.${commandName}`, args).catch(() => {});
 	} catch (err) {
 		console.error(`[DOT COMMAND ERROR]`, err);
 		await message.reply('❌ An error occurred while executing that command.');
+		// Log failure to system logs
+		logCommand(message.guild, message.author, `.${commandName}`, args, 'failed', err?.message?.slice(0, 500)).catch(() => {});
 	}
 };

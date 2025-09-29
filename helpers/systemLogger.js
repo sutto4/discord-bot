@@ -16,8 +16,14 @@ async function sendSystemLog(payload) {
   }
 
   try {
-    console.log('[BOT->SYSTEM-LOG] Sending log to:', `${baseUrl}/api/system-events/log`);
-    const res = await fetch(`${baseUrl}/api/system-events/log`, {
+    // Clean the base URL and ensure proper path construction
+    const cleanBaseUrl = baseUrl.replace(/\/+$/, ''); // Remove trailing slashes
+    const logUrl = `${cleanBaseUrl}/api/system-events/log`;
+    
+    console.log('[BOT->SYSTEM-LOG] Sending log to:', logUrl);
+    console.log('[BOT->SYSTEM-LOG] Payload:', JSON.stringify(payload, null, 2));
+    
+    const res = await fetch(logUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

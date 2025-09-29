@@ -1,15 +1,22 @@
 const fetch = require('node-fetch');
 
 async function sendSystemLog(payload) {
-  const baseUrl = process.env.WEBAPP_BASE_URL; // e.g., https://yourapp.com or http://localhost:3000
+  // Use the same API_BASE as guild events for consistency
+  const baseUrl = process.env.API_BASE || process.env.WEBAPP_BASE_URL;
   const secret = process.env.SYSTEM_EVENTS_SECRET;
 
   if (!baseUrl || !secret) {
-    // Silently skip if not configured
+    console.warn('[BOT->SYSTEM-LOG] Skipping system log - missing env vars:', {
+      hasBaseUrl: !!baseUrl,
+      hasSecret: !!secret,
+      baseUrl: baseUrl || 'undefined',
+      secretLength: secret ? secret.length : 0
+    });
     return false;
   }
 
   try {
+    console.log('[BOT->SYSTEM-LOG] Sending log to:', `${baseUrl}/api/system-events/log`);
     const res = await fetch(`${baseUrl}/api/system-events/log`, {
       method: 'POST',
       headers: {
@@ -18,6 +25,13 @@ async function sendSystemLog(payload) {
       },
       body: JSON.stringify(payload)
     });
+    
+    if (res.ok) {
+      console.log('[BOT->SYSTEM-LOG] Successfully sent log:', payload.actionName);
+    } else {
+      console.warn('[BOT->SYSTEM-LOG] Failed to send log:', res.status, res.statusText);
+    }
+    
     return res.ok;
   } catch (err) {
     console.error('[BOT->SYSTEM-LOG] Failed to send log:', err.message);

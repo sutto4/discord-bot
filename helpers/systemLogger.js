@@ -18,7 +18,14 @@ async function sendSystemLog(payload) {
   try {
     // Clean the base URL and ensure proper path construction
     const cleanBaseUrl = baseUrl.replace(/\/+$/, ''); // Remove trailing slashes
-    const logUrl = `${cleanBaseUrl}/api/system-events/log`;
+    
+    // Check if API_BASE already includes /api, if so don't add it again
+    let logUrl;
+    if (cleanBaseUrl.includes('/api')) {
+      logUrl = `${cleanBaseUrl}/system-events/log`;
+    } else {
+      logUrl = `${cleanBaseUrl}/api/system-events/log`;
+    }
     
     console.log('[BOT->SYSTEM-LOG] Sending log to:', logUrl);
     console.log('[BOT->SYSTEM-LOG] Payload:', JSON.stringify(payload, null, 2));

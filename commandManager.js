@@ -1,4 +1,5 @@
 const { CommandRegistry } = require('./services/commandRegistry');
+const { logCommand } = require('./helpers/systemLogger');
 
 class CommandManager {
   constructor(client) {
@@ -70,8 +71,16 @@ class CommandManager {
             ephemeral: true 
           });
       }
+      
+      // Log successful command to system logs
+      logCommand(interaction.guild, interaction.user, `/${commandName}`, interaction.options?.data || []).catch(() => {});
+      
     } catch (error) {
       console.error(`[COMMAND-MANAGER] Error handling command ${commandName}:`, error);
+      
+      // Log failed command to system logs
+      logCommand(interaction.guild, interaction.user, `/${commandName}`, interaction.options?.data || [], 'failed', error?.message?.slice(0, 500)).catch(() => {});
+      
       await interaction.reply({ 
         content: 'An error occurred while executing this command.', 
         ephemeral: true 

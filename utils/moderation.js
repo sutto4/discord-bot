@@ -147,6 +147,7 @@ async function logModerationAction(guild, action, moderatorUser, targetMember, r
 		await logChannel.send({ embeds: [embed] }).catch(() => null);
 
 		// Log moderation action to system logs
+		console.log('[MODERATION] Attempting to log to system logs...');
 		logAction(
 			guild,
 			moderatorUser,
@@ -160,7 +161,9 @@ async function logModerationAction(guild, action, moderatorUser, targetMember, r
 				caseId
 			},
 			'success'
-		).catch(() => {});
+		).catch((err) => {
+			console.error('[MODERATION] System log failed:', err.message);
+		});
 	} catch (err) {
 		console.error('Failed to log moderation action:', err);
 		

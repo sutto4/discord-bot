@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
+const { logAction } = require('../helpers/systemLogger');
 
 function parseDuration(input) {
 	if (!input) return null;
@@ -144,8 +145,41 @@ async function logModerationAction(guild, action, moderatorUser, targetMember, r
 		}
 
 		await logChannel.send({ embeds: [embed] }).catch(() => null);
+
+		// Log moderation action to system logs
+		logAction(
+			guild,
+			moderatorUser,
+			`moderation_${action}`,
+			{
+				action,
+				targetUserId: targetMember?.id,
+				targetUsername: targetMember?.user?.tag || targetMember?.tag,
+				reason,
+				durationLabel,
+				caseId
+			},
+			'success'
+		).catch(() => {});
 	} catch (err) {
 		console.error('Failed to log moderation action:', err);
+		
+		// Log failed moderation action to system logs
+		logAction(
+			guild,
+			moderatorUser,
+			`moderation_${action}`,
+			{
+				action,
+				targetUserId: targetMember?.id,
+				targetUsername: targetMember?.user?.tag || targetMember?.tag,
+				reason,
+				durationLabel,
+				caseId
+			},
+			'failed',
+			err?.message?.slice(0, 500)
+		).catch(() => {});
 	}
 }
 

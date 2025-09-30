@@ -1,5 +1,5 @@
 const { CommandRegistry } = require('./services/commandRegistry');
-const { logCommand } = require('./helpers/systemLogger');
+const { logCommand, logAction } = require('./helpers/systemLogger');
 
 class CommandManager {
   constructor(client) {
@@ -72,14 +72,30 @@ class CommandManager {
           });
       }
       
-      // Log successful command to system logs
-      logCommand(interaction.guild, interaction.user, `/${commandName}`, interaction.options?.data || []).catch(() => {});
+      // Log command to system logs - use moderation_action for moderation commands
+      const moderationCommands = ['warn', 'kick', 'ban', 'mute', 'unmute', 'unban', 'prune'];
+      if (moderationCommands.includes(commandName)) {
+        logAction(interaction.guild, interaction.user, commandName, {
+          command: commandName,
+          args: interaction.options?.data || []
+        }).catch(() => {});
+      } else {
+        logCommand(interaction.guild, interaction.user, `/${commandName}`, interaction.options?.data || []).catch(() => {});
+      }
       
     } catch (error) {
       console.error(`[COMMAND-MANAGER] Error handling command ${commandName}:`, error);
       
       // Log failed command to system logs
-      logCommand(interaction.guild, interaction.user, `/${commandName}`, interaction.options?.data || [], 'failed', error?.message?.slice(0, 500)).catch(() => {});
+      const moderationCommands = ['warn', 'kick', 'ban', 'mute', 'unmute', 'unban', 'prune'];
+      if (moderationCommands.includes(commandName)) {
+        logAction(interaction.guild, interaction.user, commandName, {
+          command: commandName,
+          args: interaction.options?.data || []
+        }, 'failed', error?.message?.slice(0, 500)).catch(() => {});
+      } else {
+        logCommand(interaction.guild, interaction.user, `/${commandName}`, interaction.options?.data || [], 'failed', error?.message?.slice(0, 500)).catch(() => {});
+      }
       
       await interaction.reply({ 
         content: 'An error occurred while executing this command.', 

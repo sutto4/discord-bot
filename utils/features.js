@@ -22,23 +22,32 @@ async function hasFeature(guildId, featureName) {
 	const key = `${guildId}:${featureName}`;
 	const now = Date.now();
 	const hit = cache.get(key);
-	if (hit && now - hit.at < TTL) return hit.value;
+	if (hit && now - hit.at < TTL) {
+		console.log(`[FEATURES] Cache hit for ${key}: ${hit.value}`);
+		return hit.value;
+	}
 
+	console.log(`[FEATURES] Cache miss for ${key}, querying database`);
 	const db = getPool();
 	if (!db?.execute) {
+		console.log(`[FEATURES] No database connection available`);
 		cache.set(key, { value: false, at: now });
 		return false;
 	}
 
 	try {
+		console.log(`[FEATURES] Querying guild_features for guild: ${guildId}, feature: ${featureName}`);
 		const [rows] = await db.execute(
 			'SELECT enabled FROM guild_features WHERE guild_id = ? AND feature_key = ? LIMIT 1',
 			[guildId, featureName]
 		);
+		console.log(`[FEATURES] Database result:`, rows);
 		const value = !!rows?.[0]?.enabled;
+		console.log(`[FEATURES] Feature enabled: ${value}`);
 		cache.set(key, { value, at: now });
 		return value;
-	} catch {
+	} catch (error) {
+		console.error(`[FEATURES] Database error:`, error);
 		cache.set(key, { value: false, at: now });
 		return false;
 	}

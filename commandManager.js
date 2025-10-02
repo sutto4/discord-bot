@@ -65,6 +65,12 @@ class CommandManager {
         case 'config':
           await this.handleConfig(interaction);
           break;
+        case 'summarise':
+          await this.handleSummarise(interaction);
+          break;
+        case 'summary':
+          await this.handleSummary(interaction);
+          break;
         default:
           await interaction.reply({ 
             content: 'Unknown command', 
@@ -238,6 +244,18 @@ class CommandManager {
     // Reuse the existing config command handler
     const configCommand = require('./commands/config');
     await configCommand.execute(interaction);
+  }
+
+  async handleSummarise(interaction) {
+    // Reuse the existing summarise command handler
+    const summariseCommand = require('./commands/summarise');
+    await summariseCommand.execute(interaction);
+  }
+
+  async handleSummary(interaction) {
+    // Reuse the existing summary command handler
+    const summaryCommand = require('./commands/summary');
+    await summaryCommand.execute(interaction);
   }
 }
 

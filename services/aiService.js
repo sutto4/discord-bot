@@ -27,7 +27,15 @@ class AIService {
 
     async isFeatureEnabled(guildId) {
         try {
-            return await hasFeature(guildId, 'ai_summarization');
+            // First check if the feature is enabled in guild_features table
+            const featureEnabled = await hasFeature(guildId, 'ai_summarization');
+            if (!featureEnabled) {
+                return false;
+            }
+
+            // Then check if AI is configured and enabled in guild_ai_config table
+            const config = await this.getGuildConfig(guildId);
+            return config && config.enabled;
         } catch (error) {
             console.error('[AI-SERVICE] Error checking feature status:', error);
             return false;

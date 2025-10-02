@@ -55,6 +55,19 @@ module.exports = {
                 return await interaction.editReply({ embeds: [embed] });
             }
 
+            // Check user permissions
+            const member = interaction.member;
+            const permissionCheck = await aiService.checkUserPermission(guild.id, user.id, member);
+            if (!permissionCheck.allowed) {
+                const embed = new EmbedBuilder()
+                    .setColor('#ff6b6b')
+                    .setTitle('❌ Access Denied')
+                    .setDescription(`You don't have permission to use AI summarization. ${permissionCheck.reason === 'Role not allowed' ? 'Contact an administrator to grant your role access.' : 'Contact an administrator for assistance.'}`)
+                    .setTimestamp();
+
+                return await interaction.editReply({ embeds: [embed] });
+            }
+
             // Get guild configuration
             const config = await aiService.getGuildConfig(guild.id);
             if (!config || !config.enabled) {

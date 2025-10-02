@@ -27,34 +27,73 @@ class AIService {
 
     async isFeatureEnabled(guildId) {
         try {
-            console.log(`[AI-SERVICE] Checking feature status for guild: ${guildId}`);
-            
             // First check if the feature is enabled in guild_features table
             const featureEnabled = await hasFeature(guildId, 'ai_summarization');
-            console.log(`[AI-SERVICE] Feature enabled in guild_features: ${featureEnabled}`);
-            
             if (!featureEnabled) {
-                console.log(`[AI-SERVICE] Feature not enabled in guild_features table`);
                 return false;
             }
 
             // Then check if AI is configured and enabled in guild_ai_config table
             const config = await this.getGuildConfig(guildId);
-            console.log(`[AI-SERVICE] AI config:`, config);
-            
-            const isEnabled = config && config.enabled;
-            console.log(`[AI-SERVICE] Final feature status: ${isEnabled}`);
-            
-            return isEnabled;
+            return config && config.enabled;
         } catch (error) {
             console.error('[AI-SERVICE] Error checking feature status:', error);
             return false;
         }
     }
 
+    async checkUserPermission(guildId, userId, member) {
+        try {
+            // Check if feature is enabled first
+            if (!await this.isFeatureEnabled(guildId)) {
+                return { allowed: false, reason: 'Feature not enabled' };
+            }
+
+            // Get user's roles
+            const userRoles = member?.roles?.cache?.map(role => role.id) || [];
+            
+            // Check if user has any allowed roles
+            const db = require('../config/database');
+            const pool = db.appDb || db.pool || db;
+            
+            const [permissionRows] = await pool.execute(`
+                SELECT allowed FROM feature_role_permissions 
+                WHERE guild_id = ? AND feature_key = ? AND role_id IN (${userRoles.map(() => '?').join(',')})
+            `, [guildId, 'ai_summarization', ...userRoles]);
+
+            // If no specific permissions found, check if there are any permissions set for this feature
+            if (permissionRows.length === 0) {
+                const [hasPermissions] = await pool.execute(`
+                    SELECT COUNT(*) as count FROM feature_role_permissions 
+                    WHERE guild_id = ? AND feature_key = ?
+                `, [guildId, 'ai_summarization']);
+
+                // If no permissions are set, allow by default
+                if (hasPermissions[0].count === 0) {
+                    return { allowed: true, reason: 'No restrictions set' };
+                } else {
+                    // If permissions exist but user has no roles, deny
+                    return { allowed: false, reason: 'No allowed roles' };
+                }
+            }
+
+            // Check if any of the user's roles are allowed
+            const hasAllowedRole = permissionRows.some(row => row.allowed);
+            
+            if (hasAllowedRole) {
+                return { allowed: true, reason: 'Role permission granted' };
+            } else {
+                return { allowed: false, reason: 'Role not allowed' };
+            }
+
+        } catch (error) {
+            console.error('[AI-SERVICE] Error checking user permission:', error);
+            return { allowed: false, reason: 'Permission check failed' };
+        }
+    }
+
     async getGuildConfig(guildId) {
         try {
-            console.log(`[AI-SERVICE] Getting guild config for: ${guildId}`);
             const db = require('../config/database');
             const pool = db.appDb || db.pool || db;
             const [rows] = await pool.execute(
@@ -62,10 +101,7 @@ class AIService {
                 [guildId]
             );
             
-            console.log(`[AI-SERVICE] Database query result:`, rows);
-            
             if (rows.length === 0) {
-                console.log(`[AI-SERVICE] No AI config found, returning default config`);
                 // Return default config
                 return {
                     enabled: false,
@@ -78,7 +114,6 @@ class AIService {
                 };
             }
             
-            console.log(`[AI-SERVICE] Found AI config:`, rows[0]);
             return rows[0];
         } catch (error) {
             console.error('[AI-SERVICE] Error getting guild config:', error);
@@ -200,15 +235,28 @@ class AIService {
                 throw new Error(`Too many messages. Maximum allowed: ${config.max_messages_per_summary}`);
             }
 
-            // Prepare messages for OpenAI
+            // Prepare messages for OpenAI with length filtering
             const formattedMessages = messages.map(msg => {
                 const timestamp = new Date(msg.createdTimestamp).toLocaleString();
-                return `[${timestamp}] ${msg.author.username}: ${msg.content}`;
+                // Truncate individual messages if they're too long (Discord limit is 2000 chars)
+                const content = msg.content.length > 1500 ? msg.content.substring(0, 1500) + '...' : msg.content;
+                return `[${timestamp}] ${msg.author.username}: ${content}`;
             }).join('\n');
 
-            // Check total message length
-            if (formattedMessages.length > 4000) {
-                throw new Error('Messages too long to process. Please reduce the number of messages.');
+            // Check total message length and truncate if necessary
+            const maxMessageLength = config.max_tokens_per_request * 3; // Rough estimate: 3 chars per token
+            let finalMessages = formattedMessages;
+            
+            if (formattedMessages.length > maxMessageLength) {
+                console.log(`[AI-SERVICE] Messages too long (${formattedMessages.length} chars), truncating to ${maxMessageLength} chars`);
+                
+                // Try to truncate at a message boundary if possible
+                const truncatedAt = formattedMessages.substring(0, maxMessageLength).lastIndexOf('\n');
+                if (truncatedAt > maxMessageLength * 0.8) { // If we can find a good break point
+                    finalMessages = formattedMessages.substring(0, truncatedAt) + '\n\n[Message truncated due to length limit]';
+                } else {
+                    finalMessages = formattedMessages.substring(0, maxMessageLength) + '\n\n[Message truncated due to length limit]';
+                }
             }
 
             // Use custom prompt or default
@@ -229,7 +277,7 @@ class AIService {
                     },
                     {
                         role: 'user',
-                        content: formattedMessages
+                        content: finalMessages
                     }
                 ],
                 max_tokens: config.max_tokens_per_request,

@@ -358,6 +358,37 @@ class CommandRegistry {
       );
     }
 
+    if (features.includes('ai_summarization')) {
+      allCommands.push(
+        { 
+          name: 'summarise', 
+          description: 'Summarize the last X messages in this channel using AI',
+          options: [
+            {
+              name: 'count',
+              description: 'Number of messages to summarize (1-50)',
+              type: 4, // INTEGER type
+              required: true,
+              min_value: 1,
+              max_value: 50
+            }
+          ]
+        },
+        { 
+          name: 'summary', 
+          description: 'Summarize messages from a specific message ID to now using AI',
+          options: [
+            {
+              name: 'message_id',
+              description: 'The message ID to start summarizing from',
+              type: 3, // STRING type
+              required: true
+            }
+          ]
+        }
+      );
+    }
+
     return allCommands;
   }
 
@@ -669,6 +700,26 @@ class CommandRegistry {
           ];
         } else if (row.command_name === 'config') {
           command.options = [];
+        } else if (row.command_name === 'summarise') {
+          command.options = [
+            {
+              name: 'count',
+              description: 'Number of messages to summarize (1-50)',
+              type: 4, // INTEGER type
+              required: true,
+              min_value: 1,
+              max_value: 50
+            }
+          ];
+        } else if (row.command_name === 'summary') {
+          command.options = [
+            {
+              name: 'message_id',
+              description: 'The message ID to start summarizing from',
+              type: 3, // STRING type
+              required: true
+            }
+          ];
         }
         
         commands.push(command);

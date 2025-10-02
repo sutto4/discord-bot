@@ -6,14 +6,30 @@ const aiService = new AIService();
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('summarise')
-        .setDescription('Summarize the last X messages in this channel using AI')
-        .addIntegerOption(option =>
-            option
-                .setName('count')
-                .setDescription('Number of messages to summarize (1-50)')
-                .setRequired(true)
-                .setMinValue(1)
-                .setMaxValue(50)
+        .setDescription('Summarize messages in this channel using AI')
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('last')
+                .setDescription('Summarize the last X messages')
+                .addIntegerOption(option =>
+                    option
+                        .setName('count')
+                        .setDescription('Number of messages to summarize (1-50)')
+                        .setRequired(true)
+                        .setMinValue(1)
+                        .setMaxValue(50)
+                )
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('from')
+                .setDescription('Summarize from a specific message ID to now')
+                .addStringOption(option =>
+                    option
+                        .setName('message_id')
+                        .setDescription('The message ID to start summarizing from')
+                        .setRequired(true)
+                )
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.SendMessages),
 
@@ -21,12 +37,12 @@ module.exports = {
         try {
             await interaction.deferReply();
 
-            const count = interaction.options.getInteger('count');
+            const subcommand = interaction.options.getSubcommand();
             const channel = interaction.channel;
             const guild = interaction.guild;
             const user = interaction.user;
 
-            console.log(`[AI-SUMMARISE] User ${user.tag} requested summary of ${count} messages in ${guild.name}`);
+            console.log(`[AI-SUMMARISE] User ${user.tag} requested ${subcommand} summary in ${guild.name}`);
 
             // Check if feature is enabled
             if (!await aiService.isFeatureEnabled(guild.id)) {
@@ -51,20 +67,66 @@ module.exports = {
                 return await interaction.editReply({ embeds: [embed] });
             }
 
-            // Validate count against guild limits
-            if (count > config.max_messages_per_summary) {
-                const embed = new EmbedBuilder()
-                    .setColor('#ff6b6b')
-                    .setTitle('❌ Too Many Messages')
-                    .setDescription(`Maximum allowed messages per summary: ${config.max_messages_per_summary}`)
-                    .setTimestamp();
+            let messages;
+            let messageArray;
+            let commandType;
 
-                return await interaction.editReply({ embeds: [embed] });
+            if (subcommand === 'last') {
+                const count = interaction.options.getInteger('count');
+                
+                // Validate count against guild limits
+                if (count > config.max_messages_per_summary) {
+                    const embed = new EmbedBuilder()
+                        .setColor('#ff6b6b')
+                        .setTitle('❌ Too Many Messages')
+                        .setDescription(`Maximum allowed messages per summary: ${config.max_messages_per_summary}`)
+                        .setTimestamp();
+
+                    return await interaction.editReply({ embeds: [embed] });
+                }
+
+                // Fetch messages
+                messages = await channel.messages.fetch({ limit: count });
+                messageArray = Array.from(messages.values()).reverse(); // Reverse to get chronological order
+                commandType = 'summarise';
+                
+            } else if (subcommand === 'from') {
+                const messageId = interaction.options.getString('message_id');
+                
+                // Validate message ID format
+                if (!/^\d{17,19}$/.test(messageId)) {
+                    const embed = new EmbedBuilder()
+                        .setColor('#ff6b6b')
+                        .setTitle('❌ Invalid Message ID')
+                        .setDescription('Please provide a valid Discord message ID. You can get this by right-clicking on a message and selecting "Copy Message Link" or "Copy ID".')
+                        .setTimestamp();
+
+                    return await interaction.editReply({ embeds: [embed] });
+                }
+
+                // Try to fetch the starting message
+                let startMessage;
+                try {
+                    startMessage = await channel.messages.fetch(messageId);
+                } catch (error) {
+                    const embed = new EmbedBuilder()
+                        .setColor('#ff6b6b')
+                        .setTitle('❌ Message Not Found')
+                        .setDescription('Could not find the specified message. Make sure the message ID is correct and the message exists in this channel.')
+                        .setTimestamp();
+
+                    return await interaction.editReply({ embeds: [embed] });
+                }
+
+                // Fetch messages after the specified message
+                messages = await channel.messages.fetch({ 
+                    after: messageId, 
+                    limit: config.max_messages_per_summary 
+                });
+                
+                messageArray = Array.from(messages.values()).reverse(); // Reverse to get chronological order
+                commandType = 'summary';
             }
-
-            // Fetch messages
-            const messages = await channel.messages.fetch({ limit: count });
-            const messageArray = Array.from(messages.values()).reverse(); // Reverse to get chronological order
 
             // Filter out bot messages and empty messages
             const filteredMessages = messageArray.filter(msg => 
@@ -97,7 +159,8 @@ module.exports = {
                 filteredMessages,
                 guild.id,
                 user.id,
-                channel.id
+                channel.id,
+                commandType
             );
 
             // Create success embed

@@ -362,27 +362,35 @@ class CommandRegistry {
       allCommands.push(
         { 
           name: 'summarise', 
-          description: 'Summarize the last X messages in this channel using AI',
+          description: 'Summarize messages in this channel using AI',
           options: [
             {
-              name: 'count',
-              description: 'Number of messages to summarize (1-50)',
-              type: 4, // INTEGER type
-              required: true,
-              min_value: 1,
-              max_value: 50
-            }
-          ]
-        },
-        { 
-          name: 'summary', 
-          description: 'Summarize messages from a specific message ID to now using AI',
-          options: [
+              name: 'last',
+              description: 'Summarize the last X messages',
+              type: 1, // SUB_COMMAND type
+              options: [
+                {
+                  name: 'count',
+                  description: 'Number of messages to summarize (1-50)',
+                  type: 4, // INTEGER type
+                  required: true,
+                  min_value: 1,
+                  max_value: 50
+                }
+              ]
+            },
             {
-              name: 'message_id',
-              description: 'The message ID to start summarizing from',
-              type: 3, // STRING type
-              required: true
+              name: 'from',
+              description: 'Summarize from a specific message ID to now',
+              type: 1, // SUB_COMMAND type
+              options: [
+                {
+                  name: 'message_id',
+                  description: 'The message ID to start summarizing from',
+                  type: 3, // STRING type
+                  required: true
+                }
+              ]
             }
           ]
         }
@@ -703,21 +711,32 @@ class CommandRegistry {
         } else if (row.command_name === 'summarise') {
           command.options = [
             {
-              name: 'count',
-              description: 'Number of messages to summarize (1-50)',
-              type: 4, // INTEGER type
-              required: true,
-              min_value: 1,
-              max_value: 50
-            }
-          ];
-        } else if (row.command_name === 'summary') {
-          command.options = [
+              name: 'last',
+              description: 'Summarize the last X messages',
+              type: 1, // SUB_COMMAND type
+              options: [
+                {
+                  name: 'count',
+                  description: 'Number of messages to summarize (1-50)',
+                  type: 4, // INTEGER type
+                  required: true,
+                  min_value: 1,
+                  max_value: 50
+                }
+              ]
+            },
             {
-              name: 'message_id',
-              description: 'The message ID to start summarizing from',
-              type: 3, // STRING type
-              required: true
+              name: 'from',
+              description: 'Summarize from a specific message ID to now',
+              type: 1, // SUB_COMMAND type
+              options: [
+                {
+                  name: 'message_id',
+                  description: 'The message ID to start summarizing from',
+                  type: 3, // STRING type
+                  required: true
+                }
+              ]
             }
           ];
         }

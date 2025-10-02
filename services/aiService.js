@@ -150,7 +150,7 @@ class AIService {
         }
     }
 
-    async summarizeMessages(messages, guildId, userId, channelId) {
+    async summarizeMessages(messages, guildId, userId, channelId, commandType = 'summarise') {
         try {
             // Check if feature is enabled
             if (!await this.isFeatureEnabled(guildId)) {
@@ -221,7 +221,7 @@ class AIService {
             await this.updateRateLimit(guildId, userId);
 
             // Log usage
-            await this.logUsage(guildId, userId, 'summarise', channelId, messages.length, tokensUsed, cost, true);
+            await this.logUsage(guildId, userId, commandType, channelId, messages.length, tokensUsed, cost, true);
 
             return {
                 summary,
@@ -234,7 +234,7 @@ class AIService {
             console.error('[AI-SERVICE] Error summarizing messages:', error);
             
             // Log failed usage
-            await this.logUsage(guildId, userId, 'summarise', channelId, messages.length, 0, 0, false, error.message);
+            await this.logUsage(guildId, userId, commandType, channelId, messages.length, 0, 0, false, error.message);
             
             throw error;
         }

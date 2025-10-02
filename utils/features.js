@@ -7,9 +7,10 @@ function getPool() {
 		// Prefer your existing DB module if available
 		if (!pool) {
 			const mod = require('../config/database');
-			pool = mod?.pool || mod; // support both { pool } and direct pool export
+			pool = mod?.appDb || mod?.pool || mod; // support both { appDb } and direct pool export
 		}
-	} catch {
+	} catch (error) {
+		console.error('[FEATURES] Error getting database pool:', error);
 		pool = null;
 	}
 	return pool;

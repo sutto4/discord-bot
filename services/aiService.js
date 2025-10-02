@@ -56,7 +56,8 @@ class AIService {
         try {
             console.log(`[AI-SERVICE] Getting guild config for: ${guildId}`);
             const db = require('../config/database');
-            const [rows] = await db.execute(
+            const pool = db.appDb || db.pool || db;
+            const [rows] = await pool.execute(
                 'SELECT * FROM guild_ai_config WHERE guild_id = ? LIMIT 1',
                 [guildId]
             );
@@ -91,12 +92,13 @@ class AIService {
             if (!config) return { allowed: false, reason: 'Configuration error' };
 
             const db = require('../config/database');
+            const pool = db.appDb || db.pool || db;
             const now = new Date();
             const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
             const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
             // Get current rate limit status
-            const [rateLimitRows] = await db.execute(
+            const [rateLimitRows] = await pool.execute(
                 'SELECT * FROM guild_ai_rate_limits WHERE guild_id = ? AND user_id = ? LIMIT 1',
                 [guildId, userId]
             );
@@ -145,9 +147,9 @@ class AIService {
     async updateRateLimit(guildId, userId) {
         try {
             const db = require('../config/database');
+            const pool = db.appDb || db.pool || db;
             const now = new Date();
-            
-            await db.execute(`
+            await pool.execute(`
                 INSERT INTO guild_ai_rate_limits (guild_id, user_id, request_count_hour, request_count_day, last_request_hour, last_request_day)
                 VALUES (?, ?, 1, 1, ?, ?)
                 ON DUPLICATE KEY UPDATE
@@ -164,7 +166,8 @@ class AIService {
     async logUsage(guildId, userId, commandType, channelId, messageCount, tokensUsed, cost, success, errorMessage = null) {
         try {
             const db = require('../config/database');
-            await db.execute(`
+            const pool = db.appDb || db.pool || db;
+            await pool.execute(`
                 INSERT INTO guild_ai_usage (guild_id, user_id, command_type, channel_id, message_count, tokens_used, cost_usd, success, error_message)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             `, [guildId, userId, commandType, channelId, messageCount, tokensUsed, cost, success, errorMessage]);
@@ -266,10 +269,11 @@ class AIService {
     async getUsageStats(guildId, days = 30) {
         try {
             const db = require('../config/database');
+            const pool = db.appDb || db.pool || db;
             const startDate = new Date();
             startDate.setDate(startDate.getDate() - days);
 
-            const [rows] = await db.execute(`
+            const [rows] = await pool.execute(`
                 SELECT 
                     COUNT(*) as total_requests,
                     SUM(tokens_used) as total_tokens,
@@ -300,7 +304,8 @@ class AIService {
     async getRecentUsage(guildId, limit = 10) {
         try {
             const db = require('../config/database');
-            const [rows] = await db.execute(`
+            const pool = db.appDb || db.pool || db;
+            const [rows] = await pool.execute(`
                 SELECT 
                     user_id,
                     command_type,

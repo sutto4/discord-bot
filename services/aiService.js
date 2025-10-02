@@ -27,15 +27,25 @@ class AIService {
 
     async isFeatureEnabled(guildId) {
         try {
+            console.log(`[AI-SERVICE] Checking feature status for guild: ${guildId}`);
+            
             // First check if the feature is enabled in guild_features table
             const featureEnabled = await hasFeature(guildId, 'ai_summarization');
+            console.log(`[AI-SERVICE] Feature enabled in guild_features: ${featureEnabled}`);
+            
             if (!featureEnabled) {
+                console.log(`[AI-SERVICE] Feature not enabled in guild_features table`);
                 return false;
             }
 
             // Then check if AI is configured and enabled in guild_ai_config table
             const config = await this.getGuildConfig(guildId);
-            return config && config.enabled;
+            console.log(`[AI-SERVICE] AI config:`, config);
+            
+            const isEnabled = config && config.enabled;
+            console.log(`[AI-SERVICE] Final feature status: ${isEnabled}`);
+            
+            return isEnabled;
         } catch (error) {
             console.error('[AI-SERVICE] Error checking feature status:', error);
             return false;
@@ -44,13 +54,17 @@ class AIService {
 
     async getGuildConfig(guildId) {
         try {
+            console.log(`[AI-SERVICE] Getting guild config for: ${guildId}`);
             const db = require('../config/database');
             const [rows] = await db.execute(
                 'SELECT * FROM guild_ai_config WHERE guild_id = ? LIMIT 1',
                 [guildId]
             );
             
+            console.log(`[AI-SERVICE] Database query result:`, rows);
+            
             if (rows.length === 0) {
+                console.log(`[AI-SERVICE] No AI config found, returning default config`);
                 // Return default config
                 return {
                     enabled: false,
@@ -63,6 +77,7 @@ class AIService {
                 };
             }
             
+            console.log(`[AI-SERVICE] Found AI config:`, rows[0]);
             return rows[0];
         } catch (error) {
             console.error('[AI-SERVICE] Error getting guild config:', error);

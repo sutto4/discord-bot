@@ -44,6 +44,14 @@ module.exports = {
 								console.log(`[GUILD_CREATE] Updating guild_commands database table for ${guild.name}`);
 								const appDb = require('../config/database').appDb;
 								
+								// First, disable all commands for this guild (set them to disabled by default)
+								await appDb.query(
+									'DELETE FROM guild_commands WHERE guild_id = ?',
+									[guild.id]
+								);
+								console.log(`[GUILD_CREATE] Cleared existing command states for ${guild.name}`);
+								
+								// Then, enable only the default commands
 								for (const commandName of defaultCommands) {
 									try {
 										// Get the feature_key for this command from command_mappings table
@@ -54,21 +62,20 @@ module.exports = {
 										
 										const featureKey = mappingResult.length > 0 ? mappingResult[0].feature_key : null;
 										
-										// Insert/update the command state in guild_commands table
+										// Insert the default command as enabled
 										await appDb.query(
 											`INSERT INTO guild_commands (guild_id, command_name, feature_key, enabled)
-											 VALUES (?, ?, ?, ?)
-											 ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), feature_key = VALUES(feature_key), updated_at = CURRENT_TIMESTAMP`,
+											 VALUES (?, ?, ?, ?)`,
 											[guild.id, commandName, featureKey, 1] // Default commands are enabled
 										);
 										
-										console.log(`[GUILD_CREATE] Updated database for command: ${commandName}`);
+										console.log(`[GUILD_CREATE] Enabled default command: ${commandName}`);
 									} catch (dbError) {
 										console.error(`[GUILD_CREATE] Error updating database for command ${commandName}:`, dbError);
 									}
 								}
 								
-								console.log(`[GUILD_CREATE] Successfully synced ${defaultCommands.length} commands to database for ${guild.name}`);
+								console.log(`[GUILD_CREATE] Successfully synced ${defaultCommands.length} default commands to database for ${guild.name}`);
 							} catch (cmdError) {
 								console.error(`[GUILD_CREATE] Error registering default commands for ${guild.name}:`, cmdError);
 							}
@@ -104,6 +111,14 @@ module.exports = {
 								console.log(`[GUILD_CREATE] Updating guild_commands database table for rejoined server ${guild.name}`);
 								const appDb = require('../config/database').appDb;
 								
+								// First, disable all commands for this guild (set them to disabled by default)
+								await appDb.query(
+									'DELETE FROM guild_commands WHERE guild_id = ?',
+									[guild.id]
+								);
+								console.log(`[GUILD_CREATE] Cleared existing command states for rejoined server ${guild.name}`);
+								
+								// Then, enable only the default commands
 								for (const commandName of defaultCommands) {
 									try {
 										// Get the feature_key for this command from command_mappings table
@@ -114,21 +129,20 @@ module.exports = {
 										
 										const featureKey = mappingResult.length > 0 ? mappingResult[0].feature_key : null;
 										
-										// Insert/update the command state in guild_commands table
+										// Insert the default command as enabled
 										await appDb.query(
 											`INSERT INTO guild_commands (guild_id, command_name, feature_key, enabled)
-											 VALUES (?, ?, ?, ?)
-											 ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), feature_key = VALUES(feature_key), updated_at = CURRENT_TIMESTAMP`,
+											 VALUES (?, ?, ?, ?)`,
 											[guild.id, commandName, featureKey, 1] // Default commands are enabled
 										);
 										
-										console.log(`[GUILD_CREATE] Updated database for rejoined server command: ${commandName}`);
+										console.log(`[GUILD_CREATE] Enabled default command for rejoined server: ${commandName}`);
 									} catch (dbError) {
 										console.error(`[GUILD_CREATE] Error updating database for rejoined server command ${commandName}:`, dbError);
 									}
 								}
 								
-								console.log(`[GUILD_CREATE] Successfully synced ${defaultCommands.length} commands to database for rejoined server ${guild.name}`);
+								console.log(`[GUILD_CREATE] Successfully synced ${defaultCommands.length} default commands to database for rejoined server ${guild.name}`);
 							} catch (cmdError) {
 								console.error(`[GUILD_CREATE] Error registering default commands for rejoined server ${guild.name}:`, cmdError);
 							}

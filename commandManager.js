@@ -206,7 +206,7 @@ class CommandManager {
       } else {
         // Update commands based on features
         const result = await this.commandRegistry.updateGuildCommands(guildId, features);
-        return { success: true, message: `Commands updated: ${result.commandsCount} commands` };
+        return { success: true, commandsCount: result.commandsCount, message: `Commands updated: ${result.commandsCount} commands` };
       }
     } catch (error) {
       console.error(`[COMMAND-MANAGER] Error updating commands for guild ${guildId}:`, error);

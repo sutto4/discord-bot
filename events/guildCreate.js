@@ -39,6 +39,36 @@ module.exports = {
 							try {
 								const result = await client.commandManager.updateGuildCommands(guild.id, defaultCommands);
 								console.log(`[GUILD_CREATE] Registered ${result.commandsCount} default commands for ${guild.name}`);
+								
+								// Update the guild_commands database table to sync with Discord
+								console.log(`[GUILD_CREATE] Updating guild_commands database table for ${guild.name}`);
+								const appDb = require('../config/database').appDb;
+								
+								for (const commandName of defaultCommands) {
+									try {
+										// Get the feature_key for this command from command_mappings table
+										const mappingResult = await appDb.query(
+											'SELECT feature_key FROM command_mappings WHERE command_name = ? LIMIT 1',
+											[commandName]
+										);
+										
+										const featureKey = mappingResult.length > 0 ? mappingResult[0].feature_key : null;
+										
+										// Insert/update the command state in guild_commands table
+										await appDb.query(
+											`INSERT INTO guild_commands (guild_id, command_name, feature_key, enabled)
+											 VALUES (?, ?, ?, ?)
+											 ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), feature_key = VALUES(feature_key), updated_at = CURRENT_TIMESTAMP`,
+											[guild.id, commandName, featureKey, 1] // Default commands are enabled
+										);
+										
+										console.log(`[GUILD_CREATE] Updated database for command: ${commandName}`);
+									} catch (dbError) {
+										console.error(`[GUILD_CREATE] Error updating database for command ${commandName}:`, dbError);
+									}
+								}
+								
+								console.log(`[GUILD_CREATE] Successfully synced ${defaultCommands.length} commands to database for ${guild.name}`);
 							} catch (cmdError) {
 								console.error(`[GUILD_CREATE] Error registering default commands for ${guild.name}:`, cmdError);
 							}
@@ -69,6 +99,36 @@ module.exports = {
 							try {
 								const result = await client.commandManager.updateGuildCommands(guild.id, defaultCommands);
 								console.log(`[GUILD_CREATE] ✅ Registered ${result.commandsCount} default commands for rejoined server ${guild.name}`);
+								
+								// Update the guild_commands database table to sync with Discord
+								console.log(`[GUILD_CREATE] Updating guild_commands database table for rejoined server ${guild.name}`);
+								const appDb = require('../config/database').appDb;
+								
+								for (const commandName of defaultCommands) {
+									try {
+										// Get the feature_key for this command from command_mappings table
+										const mappingResult = await appDb.query(
+											'SELECT feature_key FROM command_mappings WHERE command_name = ? LIMIT 1',
+											[commandName]
+										);
+										
+										const featureKey = mappingResult.length > 0 ? mappingResult[0].feature_key : null;
+										
+										// Insert/update the command state in guild_commands table
+										await appDb.query(
+											`INSERT INTO guild_commands (guild_id, command_name, feature_key, enabled)
+											 VALUES (?, ?, ?, ?)
+											 ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), feature_key = VALUES(feature_key), updated_at = CURRENT_TIMESTAMP`,
+											[guild.id, commandName, featureKey, 1] // Default commands are enabled
+										);
+										
+										console.log(`[GUILD_CREATE] Updated database for rejoined server command: ${commandName}`);
+									} catch (dbError) {
+										console.error(`[GUILD_CREATE] Error updating database for rejoined server command ${commandName}:`, dbError);
+									}
+								}
+								
+								console.log(`[GUILD_CREATE] Successfully synced ${defaultCommands.length} commands to database for rejoined server ${guild.name}`);
 							} catch (cmdError) {
 								console.error(`[GUILD_CREATE] Error registering default commands for rejoined server ${guild.name}:`, cmdError);
 							}

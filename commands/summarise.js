@@ -19,6 +19,12 @@ module.exports = {
                         .setMinValue(1)
                         .setMaxValue(50)
                 )
+                .addStringOption(option =>
+                    option
+                        .setName('prompt')
+                        .setDescription('Extra instructions to guide the summary (optional)')
+                        .setRequired(false)
+                )
         )
         .addSubcommand(subcommand =>
             subcommand
@@ -29,6 +35,12 @@ module.exports = {
                         .setName('message_id')
                         .setDescription('The message ID to start summarizing from')
                         .setRequired(true)
+                )
+                .addStringOption(option =>
+                    option
+                        .setName('prompt')
+                        .setDescription('Extra instructions to guide the summary (optional)')
+                        .setRequired(false)
                 )
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.SendMessages),
@@ -83,6 +95,8 @@ module.exports = {
             let messages;
             let messageArray;
             let commandType;
+
+            const supplementaryPrompt = interaction.options.getString('prompt');
 
             if (subcommand === 'last') {
                 const count = interaction.options.getInteger('count');
@@ -173,7 +187,8 @@ module.exports = {
                 guild.id,
                 user.id,
                 channel.id,
-                commandType
+                commandType,
+                supplementaryPrompt
             );
 
             // Create success embed

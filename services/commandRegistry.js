@@ -376,6 +376,12 @@ class CommandRegistry {
                   required: true,
                   min_value: 1,
                   max_value: 50
+                },
+                {
+                  name: 'prompt',
+                  description: 'Extra instructions to guide the summary',
+                  type: 3, // STRING
+                  required: false
                 }
               ]
             },
@@ -389,6 +395,12 @@ class CommandRegistry {
                   description: 'The message ID to start summarizing from',
                   type: 3, // STRING type
                   required: true
+                },
+                {
+                  name: 'prompt',
+                  description: 'Extra instructions to guide the summary',
+                  type: 3, // STRING
+                  required: false
                 }
               ]
             }
@@ -722,6 +734,12 @@ class CommandRegistry {
                   required: true,
                   min_value: 1,
                   max_value: 50
+                },
+                {
+                  name: 'prompt',
+                  description: 'Extra instructions to guide the summary',
+                  type: 3, // STRING
+                  required: false
                 }
               ]
             },
@@ -735,6 +753,12 @@ class CommandRegistry {
                   description: 'The message ID to start summarizing from',
                   type: 3, // STRING type
                   required: true
+                },
+                {
+                  name: 'prompt',
+                  description: 'Extra instructions to guide the summary',
+                  type: 3, // STRING
+                  required: false
                 }
               ]
             }

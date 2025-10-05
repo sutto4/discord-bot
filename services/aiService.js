@@ -211,7 +211,7 @@ class AIService {
         }
     }
 
-    async summarizeMessages(messages, guildId, userId, channelId, commandType = 'summarise') {
+    async summarizeMessages(messages, guildId, userId, channelId, commandType = 'summarise', supplementaryPrompt = null) {
         try {
             // Check if feature is enabled
             if (!await this.isFeatureEnabled(guildId)) {
@@ -259,9 +259,12 @@ class AIService {
                 }
             }
 
-            // Use custom prompt or default
-            const prompt = config.custom_prompt || 
-                'Summarize the following Discord messages in a clear, concise way. Focus on the main topics, decisions, and key points discussed. Keep the summary under 500 words.';
+            // Build the system prompt from base config plus any supplementary prompt from the user
+            const basePrompt = config.custom_prompt || 'Summarize the following Discord messages in a clear, concise way. Focus on the main topics, decisions, and key points discussed. Keep the summary under 500 words.';
+            const trimmedSupplement = (typeof supplementaryPrompt === 'string' ? supplementaryPrompt.trim() : '');
+            const systemPrompt = trimmedSupplement && trimmedSupplement.length > 0
+                ? `${basePrompt}\n\nAdditional instructions from the requester:\n${trimmedSupplement}`
+                : basePrompt;
 
             // Call OpenAI API
             if (!this.openai) {
@@ -273,7 +276,7 @@ class AIService {
                 messages: [
                     {
                         role: 'system',
-                        content: prompt
+                        content: systemPrompt
                     },
                     {
                         role: 'user',

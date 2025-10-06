@@ -62,6 +62,22 @@ async function sendMessageWithCustomBot(channel, messageOptions, guildId) {
 }
 
 /**
+ * Edit an existing message with custom bot appearance (same as send, but for editing)
+ */
+async function editMessageWithCustomBot(channel, messageId, messageOptions, guildId) {
+  try {
+    const message = await channel.messages.fetch(messageId);
+    if (!message) throw new Error('Message not found');
+    
+    // Just edit the message directly (no need for bot appearance changes on edit)
+    return await message.edit(messageOptions);
+  } catch (error) {
+    console.error('Failed to edit message:', error);
+    throw error;
+  }
+}
+
+/**
  * Resolve @username patterns in text to actual <@userId> mentions.
  * - Matches tokens like "@sutto" and tries to resolve by username or displayName.
  * - Limits to a small number of lookups to avoid abuse.
@@ -333,6 +349,17 @@ router.post('/publish-menu', async (req, res) => {
         `INSERT INTO reaction_role_mappings (reaction_role_message_id, emoji, emoji_id, role_id) VALUES ${placeholders3}`,
         values3
       );
+
+      // Update the Discord message with the correct customId now that we have the database ID
+      const updatedSelect = new StringSelectMenuBuilder()
+        .setCustomId(`rr_menu_${msg.id}`)
+        .setPlaceholder(placeholder || 'Select roles')
+        .setMinValues(Math.max(0, Math.min(options.length, Number(minValues ?? 0))))
+        .setMaxValues(Math.max(1, Math.min(options.length, Number(maxValues ?? options.length))))
+        .addOptions(options);
+      const updatedRow = new ActionRowBuilder().addComponents(updatedSelect);
+
+      await editMessageWithCustomBot(channel, sent.id, { embeds: [embed], components: [updatedRow] }, guildId);
     }
 
     // Cache createdBy for GET list

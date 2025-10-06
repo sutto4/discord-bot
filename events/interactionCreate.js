@@ -60,9 +60,24 @@ module.exports = {
 			try {
 				await interaction.deferReply({ flags: 64 });
 				const internalIdStr = interaction.customId.slice('rr_menu_'.length);
-				const internalId = Number(internalIdStr);
+				let internalId = Number(internalIdStr);
+				
+				// Handle legacy 'rr_menu_new' customId by looking up the message in the database
 				if (!Number.isFinite(internalId)) {
-					return interaction.editReply({ content: 'Invalid menu id.' });
+					if (internalIdStr === 'new' && interaction.message?.id) {
+						// Look up the internal ID from the database using the Discord message ID
+						const [rows] = await appDb.execute(
+							`SELECT id FROM reaction_role_messages WHERE guild_id = ? AND message_id = ? LIMIT 1`,
+							[interaction.guild.id, interaction.message.id]
+						);
+						if (rows && rows.length > 0) {
+							internalId = rows[0].id;
+						} else {
+							return interaction.editReply({ content: 'This reaction role menu is not registered in the database. Please recreate it.' });
+						}
+					} else {
+						return interaction.editReply({ content: 'Invalid menu id.' });
+					}
 				}
 				const selectedRoleIds = interaction.values.map(String);
 				const guild = interaction.guild;

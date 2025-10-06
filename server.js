@@ -138,7 +138,7 @@ module.exports = function startServer(client) {
           name: cmd.name,
           description: cmd.description,
           category: cmd.category,
-          enabled: state ? (state.enabled === 1) : true // Default to enabled if not set
+          enabled: state ? (state.enabled === 1) : false // Default to disabled if not set
         };
       });
 

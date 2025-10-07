@@ -48,14 +48,24 @@ module.exports = {
 			.setRequired(false)
 			.setMaxLength(100);
 
-		// Add inputs to action rows
+		// Urgency input (NEW: using 5th action row for support tickets)
+		const urgencyInput = new TextInputBuilder()
+			.setCustomId('feedback_priority')
+			.setLabel('Urgency (Low/Medium/High/Critical)')
+			.setStyle(TextInputStyle.Short)
+			.setPlaceholder('Low, Medium, High, or Critical')
+			.setRequired(false)
+			.setMaxLength(20);
+
+		// Add inputs to action rows (now using all 5 rows!)
 		const firstActionRow = new ActionRowBuilder().addComponents(feedbackTypeInput);
 		const secondActionRow = new ActionRowBuilder().addComponents(subjectInput);
 		const thirdActionRow = new ActionRowBuilder().addComponents(detailsInput);
 		const fourthActionRow = new ActionRowBuilder().addComponents(contactInput);
+		const fifthActionRow = new ActionRowBuilder().addComponents(urgencyInput);
 
 		// Add action rows to modal
-		modal.addComponents(firstActionRow, secondActionRow, thirdActionRow, fourthActionRow);
+		modal.addComponents(firstActionRow, secondActionRow, thirdActionRow, fourthActionRow, fifthActionRow);
 
 		// Show modal
 		await interaction.showModal(modal);

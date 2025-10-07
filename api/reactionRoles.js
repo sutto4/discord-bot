@@ -86,15 +86,18 @@ async function editMessageWithCustomBot(channel, messageId, messageOptions, guil
 async function resolveUserMentions(guild, text) {
   try {
     if (!text || typeof text !== 'string') return { text, userIds: [] };
-    // Fetch members to ensure we can resolve names (requires GUILD_MEMBERS intent)
-    try { await guild.members.fetch(); } catch {}
+    
+    // RATE LIMIT FIX: Only use cached members, don't fetch all
+    // This prevents hitting Discord's guild members rate limit
+    // The cache is populated by Gateway events (GUILD_MEMBER_ADD, etc.)
     const maxMentions = 10;
     const userIds = new Set();
+    
     // Match @word with a safe character set; avoid already-formatted <@id>
     const re = /(^|[^<\w])@([A-Za-z0-9_.]{2,32})/g;
     const replaced = text.replace(re, (m, prefix, name) => {
       if (userIds.size >= maxMentions) return m;
-      // Find by username or displayName (case-insensitive)
+      // Find by username or displayName (case-insensitive) in cache only
       const lower = String(name).toLowerCase();
       const member = guild.members.cache.find(
         (mem) =>
@@ -102,7 +105,7 @@ async function resolveUserMentions(guild, text) {
           mem.displayName?.toLowerCase() === lower ||
           mem.user?.globalName?.toLowerCase?.() === lower
       );
-      if (!member) return m;
+      if (!member) return m; // If not in cache, leave as-is
       userIds.add(member.id);
       return `${prefix}<@${member.id}>`;
     });

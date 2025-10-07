@@ -919,8 +919,28 @@ module.exports = function startServer(client) {
   // Members (legacy, full list) — includes avatarUrl
   app.get("/api/guilds/:guildId/members", async (req, res) => {
     try {
+      const memberCache = require('./utils/memberCache');
       const guild = await client.guilds.fetch(req.params.guildId);
-      await guild.members.fetch();
+      
+      // RATE LIMIT FIX: Check cache first, only fetch if cache is invalid
+      let cachedData = memberCache.get(req.params.guildId);
+      
+      if (!cachedData) {
+        console.log(`[MEMBERS] Cache miss for guild ${req.params.guildId}, fetching from Discord (chunked)`);
+        
+        // Fetch members in chunks to respect rate limits
+        // Limit to 1000 members at a time for safety
+        const options = { limit: 1000 };
+        await guild.members.fetch(options);
+        
+        // Store in cache
+        const membersArray = Array.from(guild.members.cache.values());
+        memberCache.set(req.params.guildId, membersArray, false);
+        
+        console.log(`[MEMBERS] Cached ${membersArray.length} members for guild ${req.params.guildId}`);
+      } else {
+        console.log(`[MEMBERS] Cache hit for guild ${req.params.guildId}, ${cachedData.members.size} members`);
+      }
 
       const { accountByDiscord, groupsByAccount } = await mapAccountsAndGroups();
 
@@ -938,9 +958,9 @@ module.exports = function startServer(client) {
           roleIds: Array.from(m.roles.cache.keys()),
           accountid,
           groups,
-          avatar: (m.user && m.user.avatar) || null, // Discord avatar hash (string or null)
-          avatarUrl: toAvatarUrl(m.user, 64), // Full CDN URL for avatar (always present, fallback to default)
-            joinedAt: m.joinedAt ?? null, // Date the user joined the server
+          avatar: (m.user && m.user.avatar) || null,
+          avatarUrl: toAvatarUrl(m.user, 64),
+          joinedAt: m.joinedAt ?? null,
         };
       });
 
@@ -960,9 +980,28 @@ module.exports = function startServer(client) {
   // Members (paged) — shape: { members, page:{ nextAfter, total? }, source, debug? }
   app.get("/api/guilds/:guildId/members-paged", async (req, res) => {
     try {
+      const memberCache = require('./utils/memberCache');
       const guild = await client.guilds.fetch(req.params.guildId);
-      // fetch all or partial: for simplicity, fetch all once; gateway/rest differentiation skipped here
-      await guild.members.fetch();
+      
+      // RATE LIMIT FIX: Use caching and chunked fetching
+      let cachedData = memberCache.get(req.params.guildId);
+      
+      if (!cachedData) {
+        console.log(`[MEMBERS-PAGED] Cache miss for guild ${req.params.guildId}, fetching from Discord (chunked)`);
+        
+        // Fetch members in chunks to respect rate limits
+        // Limit to 1000 members at a time for safety
+        const options = { limit: 1000 };
+        await guild.members.fetch(options);
+        
+        // Store in cache
+        const membersArray = Array.from(guild.members.cache.values());
+        memberCache.set(req.params.guildId, membersArray, false);
+        
+        console.log(`[MEMBERS-PAGED] Cached ${membersArray.length} members for guild ${req.params.guildId}`);
+      } else {
+        console.log(`[MEMBERS-PAGED] Cache hit for guild ${req.params.guildId}, ${cachedData.members.size} members`);
+      }
 
       const { accountByDiscord, groupsByAccount } = await mapAccountsAndGroups();
 
@@ -980,8 +1019,8 @@ module.exports = function startServer(client) {
           roleIds: Array.from(m.roles.cache.keys()),
           accountid,
           groups,
-          avatar: (m.user && m.user.avatar) || null, // Discord avatar hash (string or null)
-          avatarUrl: toAvatarUrl(m.user, 64), // Full CDN URL for avatar (always present, fallback to default)
+          avatar: (m.user && m.user.avatar) || null,
+          avatarUrl: toAvatarUrl(m.user, 64),
         };
       });
 
@@ -1000,7 +1039,7 @@ module.exports = function startServer(client) {
       res.json({
         members: items,
         page: { nextAfter, total: req.query.all ? total : null },
-        source: "gateway",
+        source: "cached",
         debug,
       });
     } catch (err) {
@@ -1012,8 +1051,19 @@ module.exports = function startServer(client) {
   // Members search — ?q=...&limit=25
   app.get("/api/guilds/:guildId/members-search", async (req, res) => {
     try {
+      const memberCache = require('./utils/memberCache');
       const guild = await client.guilds.fetch(req.params.guildId);
-      await guild.members.fetch();
+      
+      // RATE LIMIT FIX: Use cache for search
+      let cachedData = memberCache.get(req.params.guildId);
+      
+      if (!cachedData) {
+        const options = { limit: 1000 };
+        await guild.members.fetch(options);
+        const membersArray = Array.from(guild.members.cache.values());
+        memberCache.set(req.params.guildId, membersArray, false);
+        console.log(`[MEMBERS-SEARCH] Cached ${membersArray.length} members for guild ${req.params.guildId}`);
+      }
 
       const { accountByDiscord, groupsByAccount } = await mapAccountsAndGroups();
 

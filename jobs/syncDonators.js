@@ -33,6 +33,8 @@ async function syncDonators(client) {
 		console.log(`[SYNC] Found ${rows.length} active donator accounts`);
 
 		// Process each enabled guild
+		const memberCache = require('../utils/memberCache');
+		
 		for (const guildConfig of enabledGuilds) {
 			const guild = client.guilds.cache.get(guildConfig.guild_id);
 			if (!guild) {
@@ -42,10 +44,25 @@ async function syncDonators(client) {
 
 			console.log(`[SYNC] Processing guild: ${guild.name} (${guild.id})`);
 			
-			// Fetch all guild members at once (much faster than individual fetches)
-			console.log('[SYNC] Fetching all guild members...');
-			await guild.members.fetch();
-			console.log(`[SYNC] Guild has ${guild.members.cache.size} members cached`);
+			// RATE LIMIT FIX: Use cache to avoid hitting rate limits across multiple guilds
+			let cachedData = memberCache.get(guild.id);
+			
+			if (!cachedData) {
+				console.log('[SYNC] Cache miss - fetching guild members (chunked)...');
+				// Fetch members in chunks to respect rate limits
+				const options = { limit: 1000 };
+				await guild.members.fetch(options);
+				
+				// Store in cache
+				const membersArray = Array.from(guild.members.cache.values());
+				memberCache.set(guild.id, membersArray, false);
+				
+				console.log(`[SYNC] Cached ${membersArray.length} members for ${guild.name}`);
+			} else {
+				console.log(`[SYNC] Using cached members (${cachedData.members.size} members) for ${guild.name}`);
+			}
+			
+			console.log(`[SYNC] Guild has ${guild.members.cache.size} members available`);
 
 			let processed = 0;
 			let found = 0;

@@ -285,14 +285,29 @@ module.exports = {
 			const subject = interaction.fields.getTextInputValue('feedback_subject');
 			const details = interaction.fields.getTextInputValue('feedback_details');
 			const contact = interaction.fields.getTextInputValue('feedback_contact') || 'Not provided';
+			const priority = interaction.fields.getTextInputValue('feedback_priority') || 'Not specified';
+
+			// Determine embed color based on priority
+			let embedColor = 0x5865F2; // Default blue
+			const priorityLower = priority.toLowerCase();
+			if (priorityLower.includes('critical')) {
+				embedColor = 0xFF0000; // Red for critical
+			} else if (priorityLower.includes('high')) {
+				embedColor = 0xFF6B00; // Orange for high
+			} else if (priorityLower.includes('medium')) {
+				embedColor = 0xFFAA00; // Yellow for medium
+			} else if (priorityLower.includes('low')) {
+				embedColor = 0x00AA00; // Green for low
+			}
 
 			// Create feedback embed for staff
 			const feedbackEmbed = new EmbedBuilder()
 				.setTitle('📝 New Feedback Received')
-				.setColor(0x5865F2)
+				.setColor(embedColor)
 				.addFields(
 					{ name: '👤 User', value: `<@${interaction.user.id}> (${interaction.user.tag})`, inline: true },
 					{ name: '📋 Type', value: feedbackType, inline: true },
+					{ name: '⚡ Priority', value: priority, inline: true },
 					{ name: '📌 Subject', value: subject, inline: false },
 					{ name: '📝 Details', value: details, inline: false },
 					{ name: '📞 Contact', value: contact, inline: true },

@@ -29,7 +29,9 @@ async function fetchGuildDataFast(guildIds, client) {
           memberCount: guild.memberCount || 0,
           roleCount: guild.roles.cache.size || 0,
           iconUrl: guild.iconURL ? guild.iconURL({ size: 128, extension: "png" }) : null,
-          createdAt: guild.createdAt ? guild.createdAt.toISOString() : null
+          createdAt: guild.createdAt ? guild.createdAt.toISOString() : null,
+          owner_id: guild.ownerId || null,
+          joined_at: guild.joinedAt ? guild.joinedAt.toISOString() : null
         };
       } catch (err) {
         console.warn(`[FAST-API] ⚠️ Failed to fetch guild ${guildId}:`, err.message);
@@ -41,6 +43,8 @@ async function fetchGuildDataFast(guildIds, client) {
           roleCount: 0,
           iconUrl: null,
           createdAt: null,
+          owner_id: null,
+          joined_at: null,
           error: err.message
         };
       }

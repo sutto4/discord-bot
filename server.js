@@ -88,6 +88,12 @@ module.exports = function startServer(client) {
     });
   });
 
+  // Get Discord user info
+  app.get("/api/user/:userId", async (req, res) => {
+    const userHandler = require('./api/user');
+    await userHandler(req, res, client);
+  });
+
   // Get available commands for a guild
   app.get("/api/guilds/:guildId/commands", async (req, res) => {
     try {

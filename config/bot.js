@@ -75,13 +75,35 @@ client.once('ready', async () => {
 	const minutes = 720; // Change this to however often you want
 	setInterval(() => syncDonators(client), minutes * 60 * 1000);
 	
-	// Initialize Twitch EventSub (replaces polling-based creator alerts)
+	// Initialize Twitch EventSub (optional - requires public webhook)
 	const { subscribeAllExistingAlerts } = require('../events/twitchEventSub');
-	await subscribeAllExistingAlerts();
+	const WEBHOOK_BASE_URL = process.env.WEBHOOK_BASE_URL;
+	const enableEventSub = WEBHOOK_BASE_URL && WEBHOOK_BASE_URL !== 'https://your-domain.com' && !WEBHOOK_BASE_URL.includes('localhost');
 	
-	// Legacy creator alerts polling (disabled - now using EventSub)
-	// const creatorAlertsMinutes = parseInt(process.env.CREATOR_ALERTS_POLL_SECONDS || '60') / 60;
-	// setInterval(() => processCreatorAlerts(client), creatorAlertsMinutes * 60 * 1000);
+	if (enableEventSub) {
+		console.log('[CREATOR-ALERTS] EventSub enabled - Twitch will use real-time webhooks');
+		try {
+			await subscribeAllExistingAlerts();
+		} catch (error) {
+			console.error('[CREATOR-ALERTS] EventSub subscription failed, falling back to polling for Twitch:', error);
+		}
+	} else {
+		console.log('[CREATOR-ALERTS] EventSub disabled - using polling for all platforms (set WEBHOOK_BASE_URL to enable)');
+	}
+	
+	// POLLING: Check all platforms (or non-Twitch if EventSub is enabled)
+	const creatorAlertsMinutes = parseInt(process.env.CREATOR_ALERTS_POLL_SECONDS || '300') / 60;
+	const skipTwitch = enableEventSub; // Only skip Twitch if EventSub is working
+	
+	if (skipTwitch) {
+		console.log(`[CREATOR-ALERTS] Starting polling for non-Twitch platforms every ${creatorAlertsMinutes} minutes`);
+	} else {
+		console.log(`[CREATOR-ALERTS] Starting polling for ALL platforms every ${creatorAlertsMinutes} minutes`);
+	}
+	
+	setInterval(() => processCreatorAlerts(client, { skipTwitch }), creatorAlertsMinutes * 60 * 1000);
+	// Run once on startup
+	processCreatorAlerts(client, { skipTwitch }).catch(err => console.error('[CREATOR-ALERTS] Startup error:', err));
 	
 	// Bot customization sync on startup + interval
 	await applyBotCustomizationForAllGuilds(client); // Run once on startup

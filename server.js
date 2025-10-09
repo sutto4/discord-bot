@@ -316,12 +316,18 @@ module.exports = function startServer(client) {
         console.log(`[BOT-COMMANDS-API] Database result for ${cmd.command_name}:`, result);
       }
 
-      // Trigger command update
+      // Trigger command update - query database for ALL enabled commands
       if (client.commandManager) {
         console.log(`[BOT-COMMANDS-API] Triggering command manager update for guild ${guildId}`);
-        // Extract enabled commands as features array
-        var enabledCommands = commands.filter(cmd => cmd.enabled).map(cmd => cmd.command_name);
-        console.log(`[BOT-COMMANDS-API] Enabled commands:`, enabledCommands);
+        
+        // Query database to get ALL enabled commands (not just the ones in the request)
+        var enabledRows = await appDb.query(
+          'SELECT command_name FROM guild_commands WHERE guild_id = ? AND enabled = 1',
+          [guildId]
+        );
+        var enabledCommands = (enabledRows[0] || []).map(row => row.command_name);
+        console.log(`[BOT-COMMANDS-API] Enabled commands from DB:`, enabledCommands);
+        
         await client.commandManager.updateGuildCommands(guildId, enabledCommands);
       } else {
         console.log(`[BOT-COMMANDS-API] No command manager available`);

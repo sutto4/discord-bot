@@ -726,9 +726,18 @@ async function clearGuildCache(guildId) {
 
 /**
  * Main creator alerts processing function
+ * @param {Object} client - Discord client
+ * @param {Object} options - Processing options
+ * @param {boolean} options.skipTwitch - If true, skip Twitch creators (they use EventSub)
  */
-async function processCreatorAlerts(client) {
-    console.log('[CREATOR-ALERTS] Starting creator alerts processing...');
+async function processCreatorAlerts(client, options = {}) {
+    const { skipTwitch = false } = options;
+    
+    if (skipTwitch) {
+        console.log('[CREATOR-ALERTS] Starting creator alerts processing (non-Twitch platforms only)...');
+    } else {
+        console.log('[CREATOR-ALERTS] Starting creator alerts processing (all platforms)...');
+    }
     
     // Initialize cache on first run
     if (!global.creatorAlertCacheInitialized) {
@@ -738,6 +747,8 @@ async function processCreatorAlerts(client) {
     
     try {
         // Get all enabled creator alert rules
+        // If skipTwitch is true, exclude Twitch creators (they use EventSub)
+        const platformFilter = skipTwitch ? `AND car.platform != 'twitch'` : '';
         const [rules] = await appDb.query(`
             SELECT 
                 car.id,
@@ -750,7 +761,7 @@ async function processCreatorAlerts(client) {
                 car.notes,
                 car.enabled
             FROM creator_alert_rules car
-            WHERE car.enabled = 1
+            WHERE car.enabled = 1 ${platformFilter}
         `);
         
         if (rules.length === 0) {
@@ -764,7 +775,11 @@ async function processCreatorAlerts(client) {
             return acc;
         }, {});
         
-        console.log(`[CREATOR-ALERTS] Processing ${rules.length} enabled creator alert rules:`, platformCounts);
+        if (skipTwitch) {
+            console.log(`[CREATOR-ALERTS] Processing ${rules.length} non-Twitch alert rules (Twitch uses EventSub):`, platformCounts);
+        } else {
+            console.log(`[CREATOR-ALERTS] Processing ${rules.length} enabled creator alert rules:`, platformCounts);
+        }
         
         // Clean up cache for deleted rules (remove cache entries that no longer have rules)
         if (global.creatorAlertCache) {

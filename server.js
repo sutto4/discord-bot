@@ -107,6 +107,11 @@ module.exports = function startServer(client) {
     await userHandler(req, res, client);
   });
 
+  app.get("/api/twitch/profile-image", async (req, res) => {
+    const twitchProfileHandler = require('./api/twitch-profile-image');
+    await twitchProfileHandler(req, res);
+  });
+
   // Get available commands for a guild
   app.get("/api/guilds/:guildId/commands", async (req, res) => {
     try {

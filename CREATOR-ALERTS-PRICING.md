@@ -79,3 +79,4 @@ Based on competitor analysis:
 - **$30-40/year** - Annual discount option
 - **Per-Server** - Each server needs its own premium subscription
 
+

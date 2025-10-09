@@ -50,3 +50,4 @@ mysql -u your_user -p your_database < database/add-mention-roles-column.sql
   - Assign `role_id` when stream goes online
   - Remove `role_id` when stream goes offline
 
+

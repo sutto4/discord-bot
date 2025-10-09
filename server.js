@@ -20,10 +20,20 @@ module.exports = function startServer(client) {
       console.log('[WEBHOOK] Received Twitch webhook request');
       console.log('[WEBHOOK] Headers:', JSON.stringify(req.headers, null, 2));
       console.log('[WEBHOOK] Body type:', typeof req.body);
+      console.log('[WEBHOOK] Body is Buffer?:', Buffer.isBuffer(req.body));
+      console.log('[WEBHOOK] Body constructor:', req.body?.constructor?.name);
       console.log('[WEBHOOK] Body length:', req.body?.length || 0);
       
       // Convert Buffer to string for signature verification
-      const bodyString = req.body.toString('utf8');
+      let bodyString;
+      if (Buffer.isBuffer(req.body)) {
+        bodyString = req.body.toString('utf8');
+      } else if (typeof req.body === 'string') {
+        bodyString = req.body;
+      } else {
+        // Body is already parsed as object, re-stringify it
+        bodyString = JSON.stringify(req.body);
+      }
       console.log('[WEBHOOK] Body string:', bodyString);
       
       const result = await processWebhookEvent(client, req.headers, bodyString);

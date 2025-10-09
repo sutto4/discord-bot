@@ -204,11 +204,8 @@ async function handleStreamOnline(client, eventData) {
     try {
         const streamerId = eventData.broadcaster_user_id;
         const streamerName = eventData.broadcaster_user_login;
-        const streamTitle = eventData.title || 'Untitled Stream';
-        const gameId = eventData.category_id;
-        const gameName = eventData.category_name || 'Unknown Game';
         
-        console.log(`[TWITCH-EVENTSUB] 🔴 ${streamerName} went live: ${streamTitle}`);
+        console.log(`[TWITCH-EVENTSUB] 🔴 ${streamerName} went live`);
         
         // Get all creator alerts for this Twitch user
         const [alerts] = await pool.execute(
@@ -221,6 +218,13 @@ async function handleStreamOnline(client, eventData) {
             console.log(`[TWITCH-EVENTSUB] No alerts configured for ${streamerName}`);
             return;
         }
+        
+        // Fetch full stream details from API (EventSub doesn't include title/category)
+        const streamDetails = await getStreamDetails(streamerId);
+        const streamTitle = streamDetails?.title || 'Untitled Stream';
+        const gameName = streamDetails?.game_name || 'Unknown';
+        
+        console.log(`[TWITCH-EVENTSUB] Stream: "${streamTitle}" | Category: "${gameName}"`);
         
         // Get stream thumbnail
         const streamThumbnail = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${streamerName.toLowerCase()}-640x360.jpg?t=${Date.now()}`;
@@ -287,6 +291,29 @@ async function handleStreamOffline(client, eventData) {
     
     // Optional: Handle offline events (update status, etc.)
     // For now, just log it
+}
+
+/**
+ * Get stream details (title, game, etc.)
+ */
+async function getStreamDetails(userId) {
+    try {
+        const token = await getTwitchToken();
+        if (!token) return null;
+        
+        const response = await fetch(`https://api.twitch.tv/helix/streams?user_id=${userId}`, {
+            headers: {
+                'Client-ID': TWITCH_CLIENT_ID,
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        const data = await response.json();
+        return data.data?.[0] || null;
+    } catch (error) {
+        console.error('[TWITCH-EVENTSUB] Error getting stream details:', error);
+        return null;
+    }
 }
 
 /**

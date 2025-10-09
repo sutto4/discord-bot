@@ -259,10 +259,18 @@ async function handleStreamOnline(client, eventData) {
                 let message = alert.custom_message || '[user] has just gone live!';
                 message = message.replace(/\[user\]/g, streamerName);
                 
-                // Role mention if specified
+                // Role mentions if specified
                 let content = message;
-                if (alert.role_id) {
-                    content = `<@&${alert.role_id}> ${message}`;
+                if (alert.mention_role_ids) {
+                    try {
+                        const mentionRoleIds = JSON.parse(alert.mention_role_ids);
+                        if (mentionRoleIds && mentionRoleIds.length > 0) {
+                            const mentions = mentionRoleIds.map(id => `<@&${id}>`).join(' ');
+                            content = `${mentions} ${message}`;
+                        }
+                    } catch (e) {
+                        console.warn(`[TWITCH-EVENTSUB] Failed to parse mention_role_ids for alert ${alert.id}`);
+                    }
                 }
                 
                 await channel.send({
@@ -271,6 +279,20 @@ async function handleStreamOnline(client, eventData) {
                 });
                 
                 console.log(`[TWITCH-EVENTSUB] ✅ Sent alert for ${streamerName} to ${channel.name}`);
+                
+                // Assign role to creator if specified (and Discord user is mapped)
+                if (alert.role_id && alert.discord_user_id) {
+                    try {
+                        const guild = await client.guilds.fetch(alert.guild_id);
+                        const member = await guild.members.fetch(alert.discord_user_id);
+                        if (member && !member.roles.cache.has(alert.role_id)) {
+                            await member.roles.add(alert.role_id);
+                            console.log(`[TWITCH-EVENTSUB] ✅ Assigned role ${alert.role_id} to ${alert.discord_user_id}`);
+                        }
+                    } catch (roleError) {
+                        console.error(`[TWITCH-EVENTSUB] ❌ Failed to assign role:`, roleError);
+                    }
+                }
                 
             } catch (channelError) {
                 console.error(`[TWITCH-EVENTSUB] ❌ Error sending alert for ${streamerName}:`, channelError);
@@ -289,8 +311,32 @@ async function handleStreamOffline(client, eventData) {
     const streamerName = eventData.broadcaster_user_login;
     console.log(`[TWITCH-EVENTSUB] ⚫ ${streamerName} went offline`);
     
-    // Optional: Handle offline events (update status, etc.)
-    // For now, just log it
+    try {
+        // Get all creator alerts for this Twitch user
+        const [alerts] = await pool.execute(
+            `SELECT * FROM creator_alert_rules 
+             WHERE platform = 'twitch' AND creator = ? AND enabled = 1`,
+            [streamerName]
+        );
+        
+        // Remove role from creator if specified
+        for (const alert of alerts) {
+            if (alert.role_id && alert.discord_user_id) {
+                try {
+                    const guild = await client.guilds.fetch(alert.guild_id);
+                    const member = await guild.members.fetch(alert.discord_user_id);
+                    if (member && member.roles.cache.has(alert.role_id)) {
+                        await member.roles.remove(alert.role_id);
+                        console.log(`[TWITCH-EVENTSUB] ✅ Removed role ${alert.role_id} from ${alert.discord_user_id}`);
+                    }
+                } catch (roleError) {
+                    console.error(`[TWITCH-EVENTSUB] ❌ Failed to remove role:`, roleError);
+                }
+            }
+        }
+    } catch (error) {
+        console.error('[TWITCH-EVENTSUB] ❌ Error handling stream.offline:', error);
+    }
 }
 
 /**

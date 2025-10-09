@@ -11,31 +11,22 @@ module.exports = function startServer(client) {
   const app = express();
   const PORT = process.env.PORT || 3001;
 
-  app.use(express.json());
-  
-  // Middleware for raw body parsing (needed for Twitch webhook verification)
-  app.use('/webhook/twitch', express.raw({type: 'application/json'}));
-
-  // Make Discord client available to all routes
-  app.use((req, res, next) => {
-    req.client = client;
-    next();
-  });
-  
-  // Also store client in app for routes that need it
-  app.set('client', client);
-  
-  // Twitch EventSub webhook endpoint
+  // CRITICAL: Twitch webhook MUST be defined BEFORE express.json()
+  // to preserve raw body for signature verification
   const { processWebhookEvent } = require('./events/twitchEventSub');
   
-  app.post('/webhook/twitch', async (req, res) => {
+  app.post('/webhook/twitch', express.raw({type: 'application/json'}), async (req, res) => {
     try {
       console.log('[WEBHOOK] Received Twitch webhook request');
       console.log('[WEBHOOK] Headers:', JSON.stringify(req.headers, null, 2));
       console.log('[WEBHOOK] Body type:', typeof req.body);
-      console.log('[WEBHOOK] Body:', req.body);
+      console.log('[WEBHOOK] Body length:', req.body?.length || 0);
       
-      const result = await processWebhookEvent(client, req.headers, req.body);
+      // Convert Buffer to string for signature verification
+      const bodyString = req.body.toString('utf8');
+      console.log('[WEBHOOK] Body string:', bodyString);
+      
+      const result = await processWebhookEvent(client, req.headers, bodyString);
       
       console.log('[WEBHOOK] Result:', result);
       res.status(result.status).send(result.message);
@@ -45,6 +36,18 @@ module.exports = function startServer(client) {
       res.status(500).send('Internal Server Error');
     }
   });
+
+  // JSON parsing for all other routes
+  app.use(express.json());
+
+  // Make Discord client available to all routes
+  app.use((req, res, next) => {
+    req.client = client;
+    next();
+  });
+  
+  // Also store client in app for routes that need it
+  app.set('client', client);
 
   // CORS: your Next app proxies to /api, but this is safe here
   app.use((req, res, next) => {

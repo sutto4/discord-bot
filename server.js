@@ -30,10 +30,18 @@ module.exports = function startServer(client) {
   
   app.post('/webhook/twitch', async (req, res) => {
     try {
+      console.log('[WEBHOOK] Received Twitch webhook request');
+      console.log('[WEBHOOK] Headers:', JSON.stringify(req.headers, null, 2));
+      console.log('[WEBHOOK] Body type:', typeof req.body);
+      console.log('[WEBHOOK] Body:', req.body);
+      
       const result = await processWebhookEvent(client, req.headers, req.body);
+      
+      console.log('[WEBHOOK] Result:', result);
       res.status(result.status).send(result.message);
     } catch (error) {
       console.error('[WEBHOOK] Twitch EventSub error:', error);
+      console.error('[WEBHOOK] Error stack:', error.stack);
       res.status(500).send('Internal Server Error');
     }
   });

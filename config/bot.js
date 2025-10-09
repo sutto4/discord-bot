@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, Collection, ActivityType } = require('discord.js');
 const fs = require('node:fs');
 const path = require('node:path');
 const syncDonators = require('../jobs/syncDonators');
@@ -44,14 +44,14 @@ async function updateBotActivityWithUserCount(client) {
 		const totalMembers = rows[0]?.total_members || 0;
 		const activityText = `${totalMembers.toLocaleString()} users`;
 		
-		await client.user.setActivity(activityText, { type: 'WATCHING' });
+		await client.user.setActivity(activityText, { type: ActivityType.Watching });
 		console.log(`[BOT] Set activity: WATCHING ${activityText}`);
 		
 		return true;
 	} catch (error) {
 		console.error('[BOT] Failed to set activity with user count:', error);
 		// Fallback to default
-		await client.user.setActivity('your servers', { type: 'WATCHING' });
+		await client.user.setActivity('your servers', { type: ActivityType.Watching });
 		return false;
 	}
 }
@@ -64,7 +64,16 @@ function updateBotActivity(text, type = 'WATCHING') {
 	}
 	
 	try {
-		client.user.setActivity(text, { type });
+		// Map string type to ActivityType enum
+		const activityTypeMap = {
+			'PLAYING': ActivityType.Playing,
+			'WATCHING': ActivityType.Watching,
+			'LISTENING': ActivityType.Listening,
+			'STREAMING': ActivityType.Streaming
+		};
+		
+		const activityType = activityTypeMap[type] || ActivityType.Watching;
+		client.user.setActivity(text, { type: activityType });
 		console.log(`[BOT] Updated activity: ${type} ${text}`);
 		return true;
 	} catch (error) {

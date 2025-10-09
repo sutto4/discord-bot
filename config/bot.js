@@ -42,7 +42,7 @@ async function updateBotActivityWithUserCount(client) {
 		);
 		
 		const totalMembers = rows[0]?.total_members || 0;
-		const activityText = `${totalMembers.toLocaleString()} users`;
+		const activityText = `over ${totalMembers.toLocaleString()} members`;
 		
 		await client.user.setActivity(activityText, { type: ActivityType.Watching });
 		console.log(`[BOT] Set activity: WATCHING ${activityText}`);

@@ -49,11 +49,13 @@ async function getTwitchToken() {
 
 /**
  * Verify Twitch webhook signature
+ * Message format: message_id + message_timestamp + body
  */
-function verifyTwitchSignature(signature, timestamp, body, secret = WEBHOOK_SECRET) {
+function verifyTwitchSignature(signature, messageId, timestamp, body, secret = WEBHOOK_SECRET) {
+    const message = messageId + timestamp + body;
     const expectedSignature = crypto
         .createHmac('sha256', secret)
-        .update(timestamp + body)
+        .update(message)
         .digest('hex');
     
     const providedSignature = signature.replace('sha256=', '');
@@ -345,11 +347,12 @@ async function subscribeAllExistingAlerts() {
 async function processWebhookEvent(client, headers, body) {
     try {
         const signature = headers['twitch-eventsub-message-signature'];
+        const messageId = headers['twitch-eventsub-message-id'];
         const timestamp = headers['twitch-eventsub-message-timestamp'];
         const messageType = headers['twitch-eventsub-message-type'];
         
         // Verify signature
-        if (!verifyTwitchSignature(signature, timestamp, body)) {
+        if (!verifyTwitchSignature(signature, messageId, timestamp, body)) {
             console.error('[TWITCH-EVENTSUB] ❌ Invalid signature');
             return { status: 403, message: 'Forbidden' };
         }

@@ -31,6 +31,52 @@ const client = new Client({
 
 client.commands = new Collection();
 
+// Function to update bot activity with user count
+async function updateBotActivityWithUserCount(client) {
+	try {
+		const { appDb } = require('./database');
+		
+		// Get total member count from all active guilds
+		const [rows] = await appDb.query(
+			'SELECT SUM(member_count) as total_members FROM guilds WHERE status = "active"'
+		);
+		
+		const totalMembers = rows[0]?.total_members || 0;
+		const activityText = `${totalMembers.toLocaleString()} users`;
+		
+		await client.user.setActivity(activityText, { type: 'WATCHING' });
+		console.log(`[BOT] Set activity: WATCHING ${activityText}`);
+		
+		return true;
+	} catch (error) {
+		console.error('[BOT] Failed to set activity with user count:', error);
+		// Fallback to default
+		await client.user.setActivity('your servers', { type: 'WATCHING' });
+		return false;
+	}
+}
+
+// Function to update bot activity with custom text
+function updateBotActivity(text, type = 'WATCHING') {
+	if (!client.user) {
+		console.error('[BOT] Cannot update activity - bot not ready');
+		return false;
+	}
+	
+	try {
+		client.user.setActivity(text, { type });
+		console.log(`[BOT] Updated activity: ${type} ${text}`);
+		return true;
+	} catch (error) {
+		console.error('[BOT] Failed to update activity:', error);
+		return false;
+	}
+}
+
+// Make functions available globally
+global.updateBotActivity = updateBotActivity;
+global.updateBotActivityWithUserCount = updateBotActivityWithUserCount;
+
 // Load slash commands
 const commandsPath = path.join(__dirname, '../commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
@@ -56,6 +102,9 @@ for (const file of eventFiles) {
 // Donator sync on startup + interval
 client.once('ready', async () => {
 	console.log(`Logged in as ${client.user.tag}`);
+
+	// Set bot activity to show total user count
+	await updateBotActivityWithUserCount(client);
 
 	// Make client available globally for webhook server
 	global.client = client;
@@ -110,6 +159,11 @@ client.once('ready', async () => {
 	
 	const botCustomizationMinutes = 30; // Check for bot customization updates every 30 minutes
 	setInterval(() => applyBotCustomizationForAllGuilds(client), botCustomizationMinutes * 60 * 1000);
+	
+	// Update bot activity with user count every hour
+	const activityUpdateMinutes = 60;
+	setInterval(() => updateBotActivityWithUserCount(client), activityUpdateMinutes * 60 * 1000);
+	console.log(`[BOT] Scheduled activity updates every ${activityUpdateMinutes} minutes`);
 });
 
 // Start the webhook server for immediate updates

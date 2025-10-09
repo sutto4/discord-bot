@@ -7,7 +7,7 @@ async function applyBotCustomization(client, guildId) {
     try {
         // Get bot customization settings from database
         const [rows] = await appDb.query(
-            `SELECT bot_name, bot_avatar FROM bot_customization WHERE guild_id = ?`,
+            `SELECT bot_name FROM bot_customization WHERE guild_id = ?`,
             [guildId]
         );
         
@@ -33,37 +33,6 @@ async function applyBotCustomization(client, guildId) {
                 console.log(`[BOT-CUSTOMIZATION] Updated bot name to "${settings.bot_name}" in guild ${guild.name}`);
             } catch (error) {
                 console.error(`[BOT-CUSTOMIZATION] Failed to update bot name in guild ${guild.name}:`, error.message);
-            }
-        }
-        
-        // Apply bot avatar change if different from current
-        if (settings.bot_avatar) {
-            try {
-                // Extract the base avatar URL without Discord's dynamic CDN parameters
-                const currentAvatarURL = client.user.displayAvatarURL({ dynamic: true });
-                const currentAvatarBase = currentAvatarURL.split('?')[0]; // Remove query parameters
-                const newAvatarBase = settings.bot_avatar.split('?')[0]; // Remove query parameters
-
-                // Only update if the base URLs are actually different
-                if (newAvatarBase !== currentAvatarBase) {
-                    console.log(`[BOT-CUSTOMIZATION] Avatar URLs differ - updating avatar`);
-                    console.log(`[BOT-CUSTOMIZATION] Current: ${currentAvatarBase}`);
-                    console.log(`[BOT-CUSTOMIZATION] New: ${newAvatarBase}`);
-
-                    // Download the image and set it as avatar
-                    const response = await fetch(settings.bot_avatar);
-                    if (response.ok) {
-                        const buffer = await response.arrayBuffer();
-                        await client.user.setAvatar(Buffer.from(buffer));
-                        console.log(`[BOT-CUSTOMIZATION] Updated bot avatar in guild ${guild.name}`);
-                    } else {
-                        console.error(`[BOT-CUSTOMIZATION] Failed to download avatar from ${settings.bot_avatar}`);
-                    }
-                } else {
-                    console.log(`[BOT-CUSTOMIZATION] Avatar URL unchanged for guild ${guild.name} - skipping update`);
-                }
-            } catch (error) {
-                console.error(`[BOT-CUSTOMIZATION] Failed to update bot avatar in guild ${guild.name}:`, error.message);
             }
         }
         
@@ -123,7 +92,7 @@ async function applyBotCustomizationForAllGuilds(client) {
 async function getBotCustomization(guildId) {
     try {
         const [rows] = await appDb.query(
-            `SELECT bot_name, bot_avatar FROM bot_customization WHERE guild_id = ?`,
+            `SELECT bot_name FROM bot_customization WHERE guild_id = ?`,
             [guildId]
         );
         
@@ -139,7 +108,7 @@ async function getBotCustomization(guildId) {
  */
 async function updateBotCustomization(guildId, settings) {
     try {
-        const { bot_name, bot_avatar } = settings;
+        const { bot_name } = settings;
         
         // Check if settings exist for this guild
         const [existing] = await appDb.query(
@@ -152,16 +121,15 @@ async function updateBotCustomization(guildId, settings) {
             await appDb.query(
                 `UPDATE bot_customization SET
                   bot_name = ?,
-                  bot_avatar = ?,
                   updated_at = CURRENT_TIMESTAMP
                  WHERE guild_id = ?`,
-                [bot_name, bot_avatar || null, guildId]
+                [bot_name, guildId]
             );
         } else {
             // Insert new settings
             await appDb.query(
-                `INSERT INTO bot_customization (guild_id, bot_name, bot_avatar) VALUES (?, ?, ?)`,
-                [guildId, bot_name, bot_avatar || null]
+                `INSERT INTO bot_customization (guild_id, bot_name) VALUES (?, ?)`,
+                [guildId, bot_name]
             );
         }
         

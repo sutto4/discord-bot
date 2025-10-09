@@ -15,7 +15,7 @@ module.exports = function startServer(client) {
   // to preserve raw body for signature verification
   const { processWebhookEvent } = require('./events/twitchEventSub');
   
-  app.post('/webhook/twitch', express.raw({type: 'application/json'}), async (req, res) => {
+  app.post('/webhook/twitch', express.text({type: 'application/json'}), async (req, res) => {
     try {
       console.log('[WEBHOOK] Received Twitch webhook request');
       console.log('[WEBHOOK] Headers:', JSON.stringify(req.headers, null, 2));
@@ -24,17 +24,9 @@ module.exports = function startServer(client) {
       console.log('[WEBHOOK] Body constructor:', req.body?.constructor?.name);
       console.log('[WEBHOOK] Body length:', req.body?.length || 0);
       
-      // Convert Buffer to string for signature verification
-      let bodyString;
-      if (Buffer.isBuffer(req.body)) {
-        bodyString = req.body.toString('utf8');
-      } else if (typeof req.body === 'string') {
-        bodyString = req.body;
-      } else {
-        // Body is already parsed as object, re-stringify it
-        bodyString = JSON.stringify(req.body);
-      }
-      console.log('[WEBHOOK] Body string:', bodyString);
+      // express.text() gives us a string directly
+      const bodyString = req.body;
+      console.log('[WEBHOOK] Body string (first 100 chars):', bodyString.substring(0, 100));
       
       const result = await processWebhookEvent(client, req.headers, bodyString);
       

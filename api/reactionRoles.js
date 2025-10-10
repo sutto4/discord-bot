@@ -378,6 +378,114 @@ router.post('/publish-menu', async (req, res) => {
   }
 });
 
+// POST /guilds/:guildId/reaction-roles/publish-classic (create embed + add reaction roles)
+router.post('/publish-classic', async (req, res) => {
+  try {
+    const guildId = req.params.guildId;
+    const {
+      channelId,
+      title,
+      description,
+      color,
+      thumbnailUrl,
+      imageUrl,
+      author,
+      footer,
+      timestamp,
+      mappings
+    } = req.body || {};
+
+    if (!isId(guildId) || !isId(channelId)) return res.status(400).json({ error: 'Invalid ids' });
+    if (!Array.isArray(mappings) || mappings.length === 0) return res.status(400).json({ error: 'Mappings required' });
+
+    const guild = await client.guilds.fetch(guildId);
+    const channel = await guild.channels.fetch(String(channelId));
+    if (!channel || !channel.isTextBased()) return res.status(400).json({ error: 'Invalid channel' });
+
+    // Build embed
+    const embed = new EmbedBuilder();
+    let allowedMentions = undefined;
+    if (title != null) embed.setTitle(String(title));
+    if (description != null) {
+      const { text, userIds } = await resolveUserMentions(guild, String(description));
+      embed.setDescription(text);
+      if (userIds.length > 0) allowedMentions = { parse: [], users: userIds };
+    }
+    if (color != null) embed.setColor(Number(color) || 0x5865F2);
+    if (thumbnailUrl) embed.setThumbnail(String(thumbnailUrl));
+    if (imageUrl) embed.setImage(String(imageUrl));
+    if (author && (author.name || author.iconUrl)) {
+      embed.setAuthor({ name: String(author.name || '\u200b'), iconURL: author.iconUrl ? String(author.iconUrl) : undefined });
+    }
+    if (footer && (footer.text || footer.iconUrl)) {
+      embed.setFooter({ text: String(footer.text || '\u200b'), iconURL: footer.iconUrl ? String(footer.iconUrl) : undefined });
+    }
+    if (timestamp) {
+      const ts = new Date(Number(timestamp));
+      if (!isNaN(ts.getTime())) embed.setTimestamp(ts);
+    }
+
+    // Send message
+    const sent = await sendMessageWithCustomBot(channel, { embeds: [embed], ...(allowedMentions ? { allowedMentions } : {}) }, guildId);
+
+    // Add reactions
+    for (const mapping of mappings) {
+      if (!mapping.emoji) continue;
+      try {
+        await sent.react(mapping.emoji);
+      } catch (e) {
+        console.error(`[REACTION-ROLES] Failed to add reaction ${mapping.emoji}:`, e.message);
+      }
+    }
+
+    // Persist in DB
+    await appDb.execute(
+      `INSERT INTO reaction_role_messages (guild_id, channel_id, message_id)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE channel_id = VALUES(channel_id), updated_at = CURRENT_TIMESTAMP`,
+      [guildId, channelId, sent.id]
+    );
+
+    const [rows] = await appDb.execute(
+      `SELECT id FROM reaction_role_messages WHERE guild_id = ? AND message_id = ? LIMIT 1`,
+      [guildId, sent.id]
+    );
+    const msg = Array.isArray(rows) && rows[0];
+    if (msg) {
+      // Clear old mappings
+      await appDb.execute(
+        `DELETE FROM reaction_role_mappings WHERE reaction_role_message_id = ?`,
+        [msg.id]
+      );
+      
+      // Insert new mappings
+      const placeholders = mappings.map(() => '(?, ?, ?, ?)').join(',');
+      const values = [];
+      for (const m of mappings) {
+        if (!m.emoji || !isId(m.roleId)) continue;
+        values.push(msg.id, m.emoji || null, m.emoji_id || null, m.roleId);
+      }
+      if (values.length > 0) {
+        await appDb.execute(
+          `INSERT INTO reaction_role_mappings (reaction_role_message_id, emoji, emoji_id, role_id) VALUES ${placeholders}`,
+          values
+        );
+      }
+    }
+
+    const userId = req.headers['x-user-id'] ? String(req.headers['x-user-id']) : null;
+    const username = req.headers['x-user-name'] ? String(req.headers['x-user-name']) : null;
+    if (userId || username) {
+      createdByCache.set(String(sent.id), { id: userId, username });
+    }
+
+    return res.json({ ok: true, messageId: sent.id, createdBy: createdByCache.get(String(sent.id)) || null });
+  } catch (e) {
+    console.error('[REACTION-ROLES] Publish classic error:', e);
+    return res.status(500).json({ error: e.message || 'publish_failed' });
+  }
+});
+
 // POST /guilds/:guildId/reaction-roles/sync-bot-customisation
 router.post('/sync-bot-customisation', async (req, res) => {
   try {
